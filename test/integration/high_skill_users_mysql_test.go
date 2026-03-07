@@ -99,7 +99,7 @@ func loadHighSkillQuery(t *testing.T) string {
 		t.Fatal("failed to detect test file path")
 	}
 
-	queryPath := filepath.Join(filepath.Dir(testFile), "..", "..", "sql", "high_skill_users_search.sql")
+	queryPath := filepath.Join(filepath.Dir(testFile), "..", "..", "sql", "search", "high_skill_users_search.sql")
 	queryBytes, err := os.ReadFile(queryPath)
 	if err != nil {
 		t.Fatalf("failed to read query file: %v", err)

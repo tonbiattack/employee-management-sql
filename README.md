@@ -1,6 +1,6 @@
 # employee-management-sql
 
-`employee-management` https://github.com/tonbiattack/employee-management の SQL 一式を取り込み、PostgreSQL で動かして検証するためのプロジェクトです。
+`spring-boot-employee-management` の SQL 一式を取り込み、PostgreSQL で動かして検証するためのプロジェクトです。
 
 ## 取り込んだSQL
 
@@ -99,7 +99,7 @@ $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres"
 ハイスキル（`skill_level >= 8`）の社員とスキル種別・スキル名・レベルを取得:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/high_skill_users_search.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/high_skill_users_search.sql
 ```
 
 Go統合テスト（実DBの MySQL を使う）:
@@ -113,19 +113,19 @@ go test -v ./test/integration
 社員ごとのスキル概要（総スキル数 / ハイスキル数 / 最高レベル）:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/employee_skill_overview.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_skill_overview.sql
 ```
 
 ハイスキル分布（スキル別の人数・平均レベル）:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/high_skill_distribution_by_skill.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/high_skill_distribution_by_skill.sql
 ```
 
 未登録カテゴリ検出（社員ごとの不足カテゴリ）:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/employee_missing_skill_category.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_missing_skill_category.sql
 ```
 
 ## ビジネスアプリ向けSQL（横断系）
@@ -139,23 +139,39 @@ docker compose exec mysql mysql -u root -pmysql -D employee < sql/sample_busines
 組織 + 役職 + 案件参画数のスナップショット:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/employee_org_project_snapshot.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_org_project_snapshot.sql
 ```
 
 案件ごとの要員・ハイスキル比率・最新評価平均:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/project_staffing_quality_summary.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_staffing_quality_summary.sql
 ```
 
 社員イベント時系列（入社・配属・休職・復職・退職）:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/employee_event_timeline.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_event_timeline.sql
 ```
 
 チームのキャパシティ/リスク要約:
 
 ```powershell
-docker compose exec mysql mysql -u root -pmysql -D employee < sql/team_capacity_risk_summary.sql
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/team_capacity_risk_summary.sql
 ```
+
+## Cobraバッチ（社員ステータス遷移）
+
+現役社員を休職へ遷移:
+
+```powershell
+go run . employee-status-transition active-to-leave --employee-id 1 --leave-date 2026-04-01
+```
+
+退職社員を現役へ復帰:
+
+```powershell
+go run . employee-status-transition retired-to-active --employee-id 5 --reinstatement-date 2026-05-01
+```
+
+環境変数 `MYSQL_BATCH_DSN` を設定すると接続先を変更できます。
