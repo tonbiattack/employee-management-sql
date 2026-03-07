@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"employee-management-sql/internal/usecase"
+	"private-employee-management-sql/internal/usecase"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"

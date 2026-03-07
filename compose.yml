@@ -17,6 +17,11 @@ services:
       retries: 10
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Postgres公式イメージの仕様:
+      # /docker-entrypoint-initdb.d 配下の *.sql は「DBディレクトリが空の初回起動時」に自動実行される。
+      # このため `docker compose up -d` だけで schema/data の投入まで完了する。
+      # 既存データがある場合は再実行されない（再投入したい場合は `docker compose down -v` が必要）。
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
   # MySQL 検証用のコンテナ。
   # bootstrap-db.ps1 側で PostgreSQL 由来のSQLを変換して流し込む前提。
   mysql:
@@ -28,6 +33,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: mysql
+      MYSQL_DATABASE: employee
     ports:
       - "3306:3306"
     healthcheck:
@@ -37,6 +43,11 @@ services:
       retries: 20
     volumes:
       - mysql-data:/var/lib/mysql
+      # MySQL公式イメージの仕様:
+      # /docker-entrypoint-initdb.d 配下の *.sql は「/var/lib/mysql が未初期化の初回起動時」に自動実行される。
+      # ここに 01-schema.sql / 02-data.sql を置くことで、コンテナ起動だけで初期投入が終わる。
+      # volume が残っていると再実行されないため、初期化をやり直す場合は volume を削除する。
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
 
 volumes:
   # DB を再起動しても検証データを残せるよう、各DBごとに volume を分けている。

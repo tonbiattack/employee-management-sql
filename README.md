@@ -1,4 +1,4 @@
-# employee-management-sql
+# private-employee-management-sql
 
 `spring-boot-employee-management` の SQL 一式を取り込み、PostgreSQL で動かして検証するためのプロジェクトです。
 
@@ -17,23 +17,18 @@
 前提:
 - Docker Desktop / Docker Engine が使えること
 
+`compose.yml` で `docker/*-init/*.sql` を `docker-entrypoint-initdb.d` にマウントしているため、
+**初回起動時は `docker compose up -d` だけでスキーマ + 初期データ投入まで完了**します。
+
 #### PostgreSQL
 
-1. PostgreSQL を起動
-
-```powershell
+```bash
 docker compose up -d postgres
 ```
 
-2. スキーマ+初期データを投入
+接続確認:
 
-```powershell
-.\scripts\bootstrap-db.ps1 -Engine postgres
-```
-
-3. 接続確認
-
-```powershell
+```bash
 docker compose exec postgres psql -U postgres -d postgres -c "select count(*) from employee.employee;"
 ```
 
@@ -45,21 +40,13 @@ postgresql://postgres:postgres@localhost:15433/postgres
 
 #### MySQL
 
-1. MySQL を起動
-
-```powershell
+```bash
 docker compose up -d mysql
 ```
 
-2. スキーマ+初期データを投入
+接続確認:
 
-```powershell
-.\scripts\bootstrap-db.ps1 -Engine mysql
-```
-
-3. 接続確認
-
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -e "select count(*) as employee_count from employee.employee;"
 ```
 
@@ -69,36 +56,25 @@ docker compose exec mysql mysql -u root -pmysql -e "select count(*) as employee_
 host=localhost port=3306 user=root password=mysql database=employee
 ```
 
-### ローカルの `psql` を使う場合
+#### 初期データを入れ直す（再初期化）
 
-前提:
-- `psql` コマンドが使えること
-- PostgreSQL に接続できること
-
-1. 接続URLを環境変数に設定
-
-```powershell
-$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres"
-```
-
-2. スキーマ+初期データを投入
-
-```powershell
-.\scripts\bootstrap-db.ps1 -Engine postgres
+```bash
+docker compose down -v
+docker compose up -d
 ```
 
 ## 補足
 
-- セットアップは `sql/spring_boot_resources/schema.sql` → `data.sql` の順で実行します。
-- `schema.sql` / `data.sql` はそのままだとスキーマ解決に差が出るため、`bootstrap-db.ps1` 側で `search_path` を補って投入しています。
-- MySQL は PostgreSQL の元SQLから投入時に方言変換しています。元データのソースは `schema.sql` / `data.sql` のままです。
-- `bootstrap-db.ps1` は PostgreSQL の場合、`psql` があればローカル実行を使い、無ければ `docker compose exec` にフォールバックします。
+- PostgreSQL 初期化SQL: `docker/postgres-init/01-schema.sql` → `02-data.sql`
+- MySQL 初期化SQL: `docker/mysql-init/01-schema.sql` → `02-data.sql`
+- MySQL 初期化SQLは、元の `sql/spring_boot_resources/schema.sql` / `data.sql` を投入可能な形へ変換した内容です。
+- `scripts/bootstrap-db.ps1` は手動投入・検証用として残しています（Dockerだけでの初期化には不要）。
 
 ## 追加SQL（MySQL）
 
 ハイスキル（`skill_level >= 8`）の社員とスキル種別・スキル名・レベルを取得:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/high_skill_users_search.sql
 ```
 
@@ -112,19 +88,19 @@ go test -v ./test/integration
 
 社員ごとのスキル概要（総スキル数 / ハイスキル数 / 最高レベル）:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_skill_overview.sql
 ```
 
 ハイスキル分布（スキル別の人数・平均レベル）:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/high_skill_distribution_by_skill.sql
 ```
 
 未登録カテゴリ検出（社員ごとの不足カテゴリ）:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_missing_skill_category.sql
 ```
 
@@ -132,31 +108,31 @@ docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employe
 
 先に不足データを補完（初回のみ）:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/sample_business_data_for_queries.sql
 ```
 
 組織 + 役職 + 案件参画数のスナップショット:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_org_project_snapshot.sql
 ```
 
 案件ごとの要員・ハイスキル比率・最新評価平均:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_staffing_quality_summary.sql
 ```
 
 社員イベント時系列（入社・配属・休職・復職・退職）:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_event_timeline.sql
 ```
 
 チームのキャパシティ/リスク要約:
 
-```powershell
+```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/team_capacity_risk_summary.sql
 ```
 
@@ -164,13 +140,13 @@ docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/team_ca
 
 現役社員を休職へ遷移:
 
-```powershell
+```bash
 go run . employee-status-transition active-to-leave --employee-id 1 --leave-date 2026-04-01
 ```
 
 退職社員を現役へ復帰:
 
-```powershell
+```bash
 go run . employee-status-transition retired-to-active --employee-id 5 --reinstatement-date 2026-05-01
 ```
 

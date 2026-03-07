@@ -3,14 +3,16 @@ package integration_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
-	batchcmd "employee-management-sql/cmd"
-	"employee-management-sql/internal/usecase"
+	batchcmd "private-employee-management-sql/cmd"
+	"private-employee-management-sql/internal/usecase"
 
 	_ "github.com/go-sql-driver/mysql"
 	gormmysql "gorm.io/driver/mysql"
@@ -204,19 +206,53 @@ func bootstrapMySQL(t *testing.T) {
 	}
 
 	repoRoot := filepath.Join(filepath.Dir(testFile), "..", "..")
-	cmd := ".\\scripts\\bootstrap-db.ps1 -Engine mysql"
-	// Docker上のMySQLに対して初期データを再投入し、テスト独立性を維持する。
-	out, err := runCommand(repoRoot, cmd)
-	if err != nil {
-		t.Fatalf("failed to bootstrap mysql: %v, output: %s", err, out)
+	// Docker上のMySQLを起動して、マウント済み初期化SQLを直接再投入する。
+	if _, err := runCommand(repoRoot, "docker", "compose", "up", "-d", "mysql"); err != nil {
+		t.Fatalf("failed to start mysql service: %v", err)
+	}
+	waitForMySQLReady(t, repoRoot)
+	if _, err := runCommand(
+		repoRoot,
+		"docker", "compose", "exec", "-T", "mysql", "sh", "-lc",
+		"MYSQL_PWD=mysql mysql --default-character-set=utf8mb4 -u root < /docker-entrypoint-initdb.d/01-schema.sql && MYSQL_PWD=mysql mysql --default-character-set=utf8mb4 -u root < /docker-entrypoint-initdb.d/02-data.sql",
+	); err != nil {
+		t.Fatalf("failed to bootstrap mysql by docker init sql: %v", err)
+	}
+	if _, err := runCommand(
+		repoRoot,
+		"docker", "compose", "exec", "-T", "mysql", "sh", "-lc",
+		"MYSQL_PWD=mysql mysql -u root -D employee -e \"select 1\"",
+	); err != nil {
+		t.Fatalf("failed to verify mysql readiness: %v", err)
 	}
 }
 
-func runCommand(workdir, command string) (string, error) {
-	cmd := exec.Command("pwsh", "-NoProfile", "-Command", command)
+func runCommand(workdir, command string, args ...string) (string, error) {
+	cmd := exec.Command(command, args...)
 	cmd.Dir = workdir
 	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("%w, output: %s", err, out)
+	}
 	return string(out), err
+}
+
+func waitForMySQLReady(t *testing.T, workdir string) {
+	t.Helper()
+
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := runCommand(
+			workdir,
+			"docker", "compose", "exec", "-T", "mysql", "sh", "-lc",
+			"MYSQL_PWD=mysql mysqladmin ping -h 127.0.0.1 -u root --silent",
+		); err == nil {
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	t.Fatal("mysql did not become ready in time")
 }
 
 func assertEmployeeStatus(t *testing.T, db *sql.DB, employeeID, expectedStatus int) {
