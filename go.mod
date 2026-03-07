@@ -1,4 +1,4 @@
-module private-employee-management-sql
+module employee-management-sql
 
 go 1.25.0
 

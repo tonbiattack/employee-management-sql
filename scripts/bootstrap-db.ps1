@@ -80,7 +80,7 @@ function Invoke-ComposePsqlFile {
   # ホスト側に psql が無くても学習用DBを再現できるようにしている。
   param([string]$SqlFile)
 
-  $containerName = "private-employee-management-$ComposeService"
+  $containerName = "employee-management-$ComposeService"
   $fallbackContainerId = Get-ContainerIdByName -ContainerName $containerName
 
   Get-Content -Raw $SqlFile |
@@ -103,7 +103,7 @@ function Invoke-ComposeMySqlFile {
   # 一時ファイルをコンテナ内に作ってから流すことで、複数文の投入を安定させる。
   param([string]$SqlFile)
 
-  $containerName = "private-employee-management-$MySqlComposeService"
+  $containerName = "employee-management-$MySqlComposeService"
   $fallbackContainerId = Get-ContainerIdByName -ContainerName $containerName
 
   Get-Content -Raw $SqlFile |
@@ -129,7 +129,7 @@ function Ensure-ComposeServiceReady {
     [int]$TimeoutSeconds = 90
   )
 
-  $preferredContainerName = "private-employee-management-$Service"
+  $preferredContainerName = "employee-management-$Service"
   function Resolve-ContainerId {
     $composeContainerId = Convert-ToTrimmedText (docker compose ps -q $Service 2>$null)
     if ($composeContainerId) {

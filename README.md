@@ -1,4 +1,4 @@
-# private-employee-management-sql
+# employee-management-sql
 
 `spring-boot-employee-management` の SQL 一式を取り込み、PostgreSQL で動かして検証するためのプロジェクトです。
 

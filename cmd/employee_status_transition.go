@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"private-employee-management-sql/internal/usecase"
+	"employee-management-sql/internal/usecase"
 
 	"github.com/spf13/cobra"
 )

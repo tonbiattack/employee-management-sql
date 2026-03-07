@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	batchcmd "private-employee-management-sql/cmd"
-	"private-employee-management-sql/internal/usecase"
+	batchcmd "employee-management-sql/cmd"
+	"employee-management-sql/internal/usecase"
 
 	_ "github.com/go-sql-driver/mysql"
 	gormmysql "gorm.io/driver/mysql"

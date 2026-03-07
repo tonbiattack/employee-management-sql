@@ -3,7 +3,7 @@ services:
   # 元の schema.sql / data.sql を最も素直に流し込みやすい側として残している。
   postgres:
     image: postgres:16-alpine
-    container_name: private-employee-management-postgres
+    container_name: employee-management-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -26,7 +26,7 @@ services:
   # bootstrap-db.ps1 側で PostgreSQL 由来のSQLを変換して流し込む前提。
   mysql:
     image: mysql:8.4
-    container_name: private-employee-management-mysql
+    container_name: employee-management-mysql
     command:
       # 日本語データを扱うので、文字コードと照合順序は最初から utf8mb4 に寄せる。
       - --character-set-server=utf8mb4
