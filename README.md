@@ -10,6 +10,11 @@
   - Spring プロジェクト `src/main/resources/*.sql` のSQL
   - `schema.sql` / `data.sql` / テーブル別SQL
 
+## ER図
+![image](https://user-images.githubusercontent.com/40497724/226085559-26d1df07-9c2b-4735-b808-91990bfb574f.png)
+
+- データベース設計は実務の中で積めていなかった経験であり、後工程での手戻りが非常に大きくなる工程なので[WEB+DB PRESS Vol.130](https://amzn.asia/d/d9WZIUN)のイミュータブルデータモデル と[楽々ERDレッスン](https://amzn.asia/d/1hdFDWd)を参考にして何度も修正を重ねながら作成しました。
+
 ## すぐ動かす
 
 ### Docker Compose で起動して投入する
