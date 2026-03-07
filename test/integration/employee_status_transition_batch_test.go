@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -221,12 +222,18 @@ func TestBasicBusinessUsecases(t *testing.T) {
 
 // テストでSQL検証とGORMユースケース呼び出しを両立するため、両接続を保持する。
 type transitionTestDB struct {
-	SQL  *sql.DB
+	SQL  *sql.Tx
 	GORM *gorm.DB
 }
 
+var bootstrapOnce sync.Once
+
 func openMySQLForTransitionTest(t *testing.T) *transitionTestDB {
 	t.Helper()
+
+	bootstrapOnce.Do(func() {
+		bootstrapMySQL(t)
+	})
 
 	dsn := os.Getenv("MYSQL_TEST_DSN")
 	if dsn == "" {
@@ -246,9 +253,17 @@ func openMySQLForTransitionTest(t *testing.T) *transitionTestDB {
 		t.Fatalf("failed to ping mysql: %v", err)
 	}
 
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("failed to begin tx: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = tx.Rollback()
+	})
+
 	// 同一接続を使って GORM ハンドルを作成し、ユースケース実行に利用する。
 	gdb, err := gorm.Open(gormmysql.New(gormmysql.Config{
-		Conn:                      db,
+		Conn:                      tx,
 		SkipInitializeWithVersion: true,
 	}), &gorm.Config{})
 	if err != nil {
@@ -256,16 +271,13 @@ func openMySQLForTransitionTest(t *testing.T) *transitionTestDB {
 	}
 
 	return &transitionTestDB{
-		SQL:  db,
+		SQL:  tx,
 		GORM: gdb,
 	}
 }
 
-func prepareTransitionFixtures(t *testing.T, db *sql.DB) {
+func prepareTransitionFixtures(t *testing.T, db *sql.Tx) {
 	t.Helper()
-
-	// 毎回同じ初期データから始めるため、DBを再投入する。
-	bootstrapMySQL(t)
 
 	// テスト前提の社員状態に揃える。
 	if _, err := db.Exec(`UPDATE employee.employee SET employee_status_id = 1 WHERE employee_id = 1`); err != nil {
@@ -288,9 +300,6 @@ func prepareTransitionFixtures(t *testing.T, db *sql.DB) {
 	}
 	if _, err := db.Exec(`INSERT INTO employee.retirement(employee_id, retirement_reason, retirement_date) VALUES (5, 'fixture retired', '2026-03-01')`); err != nil {
 		t.Fatalf("failed to setup retirement fixture for employee 5: %v", err)
-	}
-	if _, err := db.Exec(`INSERT INTO employee.retired_employee(employee_id, returning_permission) VALUES (5, true)`); err != nil {
-		t.Fatalf("failed to setup retired employee fixture for employee 5: %v", err)
 	}
 }
 
@@ -352,7 +361,7 @@ func waitForMySQLReady(t *testing.T, workdir string) {
 	t.Fatal("mysql did not become ready in time")
 }
 
-func assertEmployeeStatus(t *testing.T, db *sql.DB, employeeID, expectedStatus int) {
+func assertEmployeeStatus(t *testing.T, db *sql.Tx, employeeID, expectedStatus int) {
 	t.Helper()
 
 	// 状態遷移の主結果(社員ステータス)を検証する。
@@ -365,7 +374,7 @@ func assertEmployeeStatus(t *testing.T, db *sql.DB, employeeID, expectedStatus i
 	}
 }
 
-func assertLeaveEvent(t *testing.T, db *sql.DB, employeeID int, leaveDate string) {
+func assertLeaveEvent(t *testing.T, db *sql.Tx, employeeID int, leaveDate string) {
 	t.Helper()
 
 	// 休職イベント履歴が1件だけ作成されることを検証する。
@@ -378,7 +387,7 @@ func assertLeaveEvent(t *testing.T, db *sql.DB, employeeID int, leaveDate string
 	}
 }
 
-func assertReinstatementEvent(t *testing.T, db *sql.DB, employeeID int, reinstatementDate string) {
+func assertReinstatementEvent(t *testing.T, db *sql.Tx, employeeID int, reinstatementDate string) {
 	t.Helper()
 
 	// 復職イベント履歴が1件だけ作成されることを検証する。
@@ -391,7 +400,7 @@ func assertReinstatementEvent(t *testing.T, db *sql.DB, employeeID int, reinstat
 	}
 }
 
-func assertRetirementEvent(t *testing.T, db *sql.DB, employeeID int, retirementDate string) {
+func assertRetirementEvent(t *testing.T, db *sql.Tx, employeeID int, retirementDate string) {
 	t.Helper()
 
 	var cnt int
@@ -403,7 +412,7 @@ func assertRetirementEvent(t *testing.T, db *sql.DB, employeeID int, retirementD
 	}
 }
 
-func assertRetiredEmployee(t *testing.T, db *sql.DB, employeeID int, expectedReturningPermission bool) {
+func assertRetiredEmployee(t *testing.T, db *sql.Tx, employeeID int, expectedReturningPermission bool) {
 	t.Helper()
 
 	var returningPermission bool
@@ -415,7 +424,7 @@ func assertRetiredEmployee(t *testing.T, db *sql.DB, employeeID int, expectedRet
 	}
 }
 
-func assertCountByQuery(t *testing.T, db *sql.DB, query string, args ...any) {
+func assertCountByQuery(t *testing.T, db *sql.Tx, query string, args ...any) {
 	t.Helper()
 
 	var cnt int
@@ -427,7 +436,7 @@ func assertCountByQuery(t *testing.T, db *sql.DB, query string, args ...any) {
 	}
 }
 
-func getOrCreateProjectID(t *testing.T, db *sql.DB) int {
+func getOrCreateProjectID(t *testing.T, db *sql.Tx) int {
 	t.Helper()
 
 	var projectID int
@@ -448,7 +457,7 @@ func getOrCreateProjectID(t *testing.T, db *sql.DB) int {
 	return int(id)
 }
 
-func getOrCreatePositionID(t *testing.T, db *sql.DB) int {
+func getOrCreatePositionID(t *testing.T, db *sql.Tx) int {
 	t.Helper()
 
 	var positionID int
@@ -466,7 +475,7 @@ func getOrCreatePositionID(t *testing.T, db *sql.DB) int {
 	return int(id)
 }
 
-func getOrCreateTwoTeamIDs(t *testing.T, db *sql.DB) (int, int) {
+func getOrCreateTwoTeamIDs(t *testing.T, db *sql.Tx) (int, int) {
 	t.Helper()
 
 	rows, err := db.Query(`SELECT team_id FROM employee.team ORDER BY team_id LIMIT 2`)
@@ -502,7 +511,7 @@ func getOrCreateTwoTeamIDs(t *testing.T, db *sql.DB) (int, int) {
 	return ids[0], ids[1]
 }
 
-func getOrCreateDivisionID(t *testing.T, db *sql.DB) int {
+func getOrCreateDivisionID(t *testing.T, db *sql.Tx) int {
 	t.Helper()
 
 	var divisionID int
@@ -525,7 +534,7 @@ func getOrCreateDivisionID(t *testing.T, db *sql.DB) int {
 	return int(id)
 }
 
-func getOrCreateDepartmentID(t *testing.T, db *sql.DB, companyID int) int {
+func getOrCreateDepartmentID(t *testing.T, db *sql.Tx, companyID int) int {
 	t.Helper()
 
 	var departmentID int
@@ -544,7 +553,7 @@ func getOrCreateDepartmentID(t *testing.T, db *sql.DB, companyID int) int {
 	return int(id)
 }
 
-func getOrCreateCompanyID(t *testing.T, db *sql.DB) int {
+func getOrCreateCompanyID(t *testing.T, db *sql.Tx) int {
 	t.Helper()
 
 	var companyID int
@@ -563,7 +572,7 @@ func getOrCreateCompanyID(t *testing.T, db *sql.DB) int {
 	return int(id)
 }
 
-func getOrCreateBusinessPartnerID(t *testing.T, db *sql.DB) int {
+func getOrCreateBusinessPartnerID(t *testing.T, db *sql.Tx) int {
 	t.Helper()
 
 	var bpID int
@@ -582,7 +591,7 @@ func getOrCreateBusinessPartnerID(t *testing.T, db *sql.DB) int {
 	return int(id)
 }
 
-func assertNoBelongingOrg(t *testing.T, db *sql.DB, employeeID int) {
+func assertNoBelongingOrg(t *testing.T, db *sql.Tx, employeeID int) {
 	t.Helper()
 
 	checks := []string{
@@ -602,7 +611,7 @@ func assertNoBelongingOrg(t *testing.T, db *sql.DB, employeeID int) {
 	}
 }
 
-func assertContactState(t *testing.T, db *sql.DB, employeeID, expectedActive, expectedLeave, expectedRetired int) {
+func assertContactState(t *testing.T, db *sql.Tx, employeeID, expectedActive, expectedLeave, expectedRetired int) {
 	t.Helper()
 
 	var activeCnt int
