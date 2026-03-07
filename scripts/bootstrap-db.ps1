@@ -48,6 +48,22 @@ function Test-CommandExists {
   return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Convert-ToTrimmedText {
+  param($Value)
+
+  if ($null -eq $Value) {
+    return ""
+  }
+
+  return ([string]$Value).Trim()
+}
+
+function Get-ContainerIdByName {
+  param([string]$ContainerName)
+
+  return Convert-ToTrimmedText (docker ps -aq --filter "name=^/$ContainerName$" 2>$null)
+}
+
 function Invoke-LocalPsqlFile {
   # PostgreSQL 用: ローカルに入っている psql でSQLファイルを実行する。
   # 失敗時は psql の終了コードをそのまま返す。
@@ -64,10 +80,21 @@ function Invoke-ComposePsqlFile {
   # ホスト側に psql が無くても学習用DBを再現できるようにしている。
   param([string]$SqlFile)
 
+  $containerName = "private-employee-management-$ComposeService"
+  $fallbackContainerId = Get-ContainerIdByName -ContainerName $containerName
+
   Get-Content -Raw $SqlFile |
     docker compose exec -T $ComposeService sh -lc "cat > /tmp/bootstrap.sql && psql -U $PostgresUser -d $PostgresDatabase -v ON_ERROR_STOP=1 -f /tmp/bootstrap.sql && rm /tmp/bootstrap.sql"
   if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+    if (-not $fallbackContainerId) {
+      exit $LASTEXITCODE
+    }
+
+    Get-Content -Raw $SqlFile |
+      docker exec -i $fallbackContainerId sh -lc "cat > /tmp/bootstrap.sql && psql -U $PostgresUser -d $PostgresDatabase -v ON_ERROR_STOP=1 -f /tmp/bootstrap.sql && rm /tmp/bootstrap.sql"
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
   }
 }
 
@@ -76,11 +103,104 @@ function Invoke-ComposeMySqlFile {
   # 一時ファイルをコンテナ内に作ってから流すことで、複数文の投入を安定させる。
   param([string]$SqlFile)
 
+  $containerName = "private-employee-management-$MySqlComposeService"
+  $fallbackContainerId = Get-ContainerIdByName -ContainerName $containerName
+
   Get-Content -Raw $SqlFile |
     docker compose exec -T $MySqlComposeService sh -lc "cat > /tmp/bootstrap.sql && MYSQL_PWD=$MySqlPassword mysql --default-character-set=utf8mb4 -u $MySqlUser < /tmp/bootstrap.sql && rm /tmp/bootstrap.sql"
   if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+    if (-not $fallbackContainerId) {
+      exit $LASTEXITCODE
+    }
+
+    Get-Content -Raw $SqlFile |
+      docker exec -i $fallbackContainerId sh -lc "cat > /tmp/bootstrap.sql && MYSQL_PWD=$MySqlPassword mysql --default-character-set=utf8mb4 -u $MySqlUser < /tmp/bootstrap.sql && rm /tmp/bootstrap.sql"
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
   }
+}
+
+function Ensure-ComposeServiceReady {
+  # docker compose のサービスが停止中なら起動し、実行可能状態になるまで待機する。
+  # integration test から単発呼び出しされた場合でも、事前の手動起動を不要にする。
+  param(
+    [string]$Service,
+    [int]$TimeoutSeconds = 90
+  )
+
+  $preferredContainerName = "private-employee-management-$Service"
+  function Resolve-ContainerId {
+    $composeContainerId = Convert-ToTrimmedText (docker compose ps -q $Service 2>$null)
+    if ($composeContainerId) {
+      return $composeContainerId
+    }
+
+    # compose 管理外でも container_name が一致する既存コンテナを拾う。
+    return Get-ContainerIdByName -ContainerName $preferredContainerName
+  }
+
+  $containerId = Resolve-ContainerId
+  $isRunning = $false
+
+  if ($containerId) {
+    $running = Convert-ToTrimmedText (docker inspect -f "{{.State.Running}}" $containerId 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $running -eq "true") {
+      $isRunning = $true
+    }
+  }
+
+  if (-not $isRunning) {
+    if ($containerId) {
+      Write-Host "[setup] start existing container: $preferredContainerName"
+      docker start $containerId | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+      }
+    } else {
+      Write-Host "[setup] start docker compose service: $Service"
+      docker compose up -d $Service
+      if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+      }
+    }
+  }
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $containerId = Resolve-ContainerId
+    if (-not $containerId) {
+      Start-Sleep -Seconds 1
+      continue
+    }
+
+    $running = Convert-ToTrimmedText (docker inspect -f "{{.State.Running}}" $containerId 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $running -ne "true") {
+      Start-Sleep -Seconds 1
+      continue
+    }
+
+    $health = Convert-ToTrimmedText (docker inspect -f "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" $containerId 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+      Start-Sleep -Seconds 1
+      continue
+    }
+
+    if ($health -eq "healthy" -or $health -eq "none") {
+      Write-Host "[setup] service ready: $Service ($health)"
+      return
+    }
+
+    if ($health -eq "unhealthy") {
+      Write-Error "docker compose service '$Service' is unhealthy."
+      exit 1
+    }
+
+    Start-Sleep -Seconds 2
+  }
+
+  Write-Error "Timed out waiting for docker compose service '$Service' to become ready."
+  exit 1
 }
 
 function Convert-PostgresSqlToMySql {
@@ -200,12 +320,14 @@ try {
     Invoke-LocalPsqlFile -SqlFile $dataBootstrapSql
   } elseif ($Engine -eq "postgres") {
     Write-Host "[mode] docker compose service: $ComposeService"
+    Ensure-ComposeServiceReady -Service $ComposeService
     Write-Host "[1/2] apply schema: $schemaSql"
     Invoke-ComposePsqlFile -SqlFile $schemaBootstrapSql
     Write-Host "[2/2] apply data: $dataSql"
     Invoke-ComposePsqlFile -SqlFile $dataBootstrapSql
   } else {
     Write-Host "[mode] docker compose service: $MySqlComposeService"
+    Ensure-ComposeServiceReady -Service $MySqlComposeService
     Write-Host "[1/2] apply schema: $schemaSql"
     Invoke-ComposeMySqlFile -SqlFile $schemaBootstrapSql
     Write-Host "[2/2] apply data: $dataSql"
