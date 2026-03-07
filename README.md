@@ -1,6 +1,8 @@
 # employee-management-sql
 
-`spring-boot-employee-management` の SQL 一式を取り込み、PostgreSQL で動かして検証するためのプロジェクトです。
+https://github.com/tonbiattack/employee-management
+
+の SQL 一式を取り込み、PostgreSQL / MySQL で動かして検証するためのプロジェクトです。
 
 ## 取り込んだSQL
 
