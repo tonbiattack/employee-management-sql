@@ -1,0 +1,44 @@
+services:
+  # PostgreSQL 検証用のコンテナ。
+  # 元の schema.sql / data.sql を最も素直に流し込みやすい側として残している。
+  postgres:
+    image: postgres:16-alpine
+    container_name: private-employee-management-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "15433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  # MySQL 検証用のコンテナ。
+  # bootstrap-db.ps1 側で PostgreSQL 由来のSQLを変換して流し込む前提。
+  mysql:
+    image: mysql:8.4
+    container_name: private-employee-management-mysql
+    command:
+      # 日本語データを扱うので、文字コードと照合順序は最初から utf8mb4 に寄せる。
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pmysql"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  # DB を再起動しても検証データを残せるよう、各DBごとに volume を分けている。
+  postgres-data:
+  mysql-data:

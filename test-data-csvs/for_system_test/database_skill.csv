@@ -1,0 +1,6 @@
+database_skill_id,database_skill_name
+1,MySQL
+2,PostgreSQL
+3,DynamoDB
+4,MongoDB
+5,SQL Server
