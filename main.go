@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"private-employee-management-sql/cmd"
+	"employee-management-sql/cmd"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
