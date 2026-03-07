@@ -102,6 +102,40 @@ func (u *EmployeeStatusTransitionUsecase) TransitionActiveToRetired(ctx context.
 			return fmt.Errorf("insert retired employee: %w", err)
 		}
 
+		// 退職時は社員連絡先を退職連絡先へ寄せ、現役/休職連絡先からは外す。
+		if err := tx.Exec(
+			`INSERT INTO employee.retired_employee_contact_information (employee_contact_information_id)
+			 SELECT eci.employee_contact_information_id
+			   FROM employee.employee_contact_information eci
+			  WHERE eci.employee_id = ?
+			    AND NOT EXISTS (
+			        SELECT 1
+			          FROM employee.retired_employee_contact_information reci
+			         WHERE reci.employee_contact_information_id = eci.employee_contact_information_id
+			    )`,
+			in.EmployeeID,
+		).Error; err != nil {
+			return fmt.Errorf("insert retired contact info: %w", err)
+		}
+		if err := clearActiveContactAndPassword(tx, in.EmployeeID); err != nil {
+			return err
+		}
+		if err := tx.Exec(
+			`DELETE l
+			   FROM employee.contact_information_for_staff_on_leave l
+			   INNER JOIN employee.employee_contact_information eci
+			     ON eci.employee_contact_information_id = l.employee_contact_information_id
+			  WHERE eci.employee_id = ?`,
+			in.EmployeeID,
+		).Error; err != nil {
+			return fmt.Errorf("remove leave contact info: %w", err)
+		}
+
+		// 退職遷移後は所属組織（会社/部署/課/チーム等）から外す。
+		if err := clearOrganizationBelongings(tx, in.EmployeeID); err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
@@ -193,6 +227,16 @@ func (u *EmployeeStatusTransitionUsecase) TransitionActiveToLeave(ctx context.Co
 			).Error; err != nil {
 				return fmt.Errorf("insert leave contact info: %w", err)
 			}
+		}
+
+		// 休職遷移後は現役連絡先を外す（連絡先は休職テーブル側で管理）。
+		if err := clearActiveContactAndPassword(tx, in.EmployeeID); err != nil {
+			return err
+		}
+
+		// 休職遷移後は所属組織（会社/部署/課/チーム等）から外す。
+		if err := clearOrganizationBelongings(tx, in.EmployeeID); err != nil {
+			return err
 		}
 
 		return nil
@@ -318,4 +362,71 @@ func lockAndGetEmployeeStatus(tx *gorm.DB, employeeID int) (int, error) {
 		return 0, fmt.Errorf("employee not found: employee_id=%d", employeeID)
 	}
 	return row.EmployeeStatusID, nil
+}
+
+// clearOrganizationBelongings は、社員に紐づく所属情報をまとめて解除する。
+// 組織離脱時は会社・部署・課・チーム・案件の所属を一貫して外す。
+func clearOrganizationBelongings(tx *gorm.DB, employeeID int) error {
+	deleteQueries := []string{
+		`DELETE FROM employee.belonging_team WHERE employee_id = ?`,
+		`DELETE FROM employee.belonging_division WHERE employee_id = ?`,
+		`DELETE FROM employee.belonging_department WHERE employee_id = ?`,
+		`DELETE FROM employee.belonging_company WHERE employee_id = ?`,
+		`DELETE FROM employee.belonging_project WHERE employee_id = ?`,
+	}
+	for _, query := range deleteQueries {
+		if err := tx.Exec(query, employeeID).Error; err != nil {
+			return fmt.Errorf("clear organization belongings: %w", err)
+		}
+	}
+	return nil
+}
+
+// clearActiveContactAndPassword は、現役連絡先にぶら下がる認証系データをFK順で削除する。
+// 依存順は ownership -> password -> active_employee_contact_information。
+// この順にしないと外部キー制約により削除エラーになる。
+func clearActiveContactAndPassword(tx *gorm.DB, employeeID int) error {
+	// password を参照している ownership を先に削除する。
+	if err := tx.Exec(
+		`DELETE o
+		   FROM employee.ownership o
+		   INNER JOIN employee.password p
+		     ON p.password_id = o.password_id
+		   INNER JOIN employee.active_employee_contact_information a
+		     ON a.active_employee_contact_information_id = p.active_employee_contact_information_id
+		   INNER JOIN employee.employee_contact_information eci
+		     ON eci.employee_contact_information_id = a.employee_contact_information_id
+		  WHERE eci.employee_id = ?`,
+		employeeID,
+	).Error; err != nil {
+		return fmt.Errorf("remove ownership: %w", err)
+	}
+
+	// 次に active_employee_contact_information を参照している password を削除する。
+	if err := tx.Exec(
+		`DELETE p
+		   FROM employee.password p
+		   INNER JOIN employee.active_employee_contact_information a
+		     ON a.active_employee_contact_information_id = p.active_employee_contact_information_id
+		   INNER JOIN employee.employee_contact_information eci
+		     ON eci.employee_contact_information_id = a.employee_contact_information_id
+		  WHERE eci.employee_id = ?`,
+		employeeID,
+	).Error; err != nil {
+		return fmt.Errorf("remove active password: %w", err)
+	}
+
+	// 最後に現役連絡先本体を削除する。
+	if err := tx.Exec(
+		`DELETE a
+		   FROM employee.active_employee_contact_information a
+		   INNER JOIN employee.employee_contact_information eci
+		     ON eci.employee_contact_information_id = a.employee_contact_information_id
+		  WHERE eci.employee_id = ?`,
+		employeeID,
+	).Error; err != nil {
+		return fmt.Errorf("remove active contact info: %w", err)
+	}
+
+	return nil
 }

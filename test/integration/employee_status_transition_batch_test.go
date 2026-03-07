@@ -39,6 +39,8 @@ func TestEmployeeStatusTransitionUsecase(t *testing.T) {
 		assertEmployeeStatus(t, db.SQL, 1, 3)
 		assertRetirementEvent(t, db.SQL, 1, "2026-03-31")
 		assertRetiredEmployee(t, db.SQL, 1, true)
+		assertNoBelongingOrg(t, db.SQL, 1)
+		assertContactState(t, db.SQL, 1, 0, 0, 1)
 	})
 
 	t.Run("現役社員を休職へ遷移できる", func(t *testing.T) {
@@ -57,6 +59,8 @@ func TestEmployeeStatusTransitionUsecase(t *testing.T) {
 
 		assertEmployeeStatus(t, db.SQL, 1, 2)
 		assertLeaveEvent(t, db.SQL, 1, "2026-04-01")
+		assertNoBelongingOrg(t, db.SQL, 1)
+		assertContactState(t, db.SQL, 1, 0, 1, 0)
 	})
 
 	t.Run("退職社員を現役へ遷移できる", func(t *testing.T) {
@@ -99,6 +103,8 @@ func TestEmployeeStatusTransitionBatchCommand(t *testing.T) {
 		assertEmployeeStatus(t, db.SQL, 1, 3)
 		assertRetirementEvent(t, db.SQL, 1, "2026-03-31")
 		assertRetiredEmployee(t, db.SQL, 1, true)
+		assertNoBelongingOrg(t, db.SQL, 1)
+		assertContactState(t, db.SQL, 1, 0, 0, 1)
 	})
 
 	t.Run("cobraバッチで現役から休職へ遷移できる", func(t *testing.T) {
@@ -119,6 +125,8 @@ func TestEmployeeStatusTransitionBatchCommand(t *testing.T) {
 
 		assertEmployeeStatus(t, db.SQL, 1, 2)
 		assertLeaveEvent(t, db.SQL, 1, "2026-06-01")
+		assertNoBelongingOrg(t, db.SQL, 1)
+		assertContactState(t, db.SQL, 1, 0, 1, 0)
 	})
 }
 
@@ -315,5 +323,68 @@ func assertRetiredEmployee(t *testing.T, db *sql.DB, employeeID int, expectedRet
 	}
 	if returningPermission != expectedReturningPermission {
 		t.Fatalf("unexpected returning permission. got=%t want=%t", returningPermission, expectedReturningPermission)
+	}
+}
+
+func assertNoBelongingOrg(t *testing.T, db *sql.DB, employeeID int) {
+	t.Helper()
+
+	checks := []string{
+		`SELECT COUNT(*) FROM employee.belonging_company WHERE employee_id = ?`,
+		`SELECT COUNT(*) FROM employee.belonging_department WHERE employee_id = ?`,
+		`SELECT COUNT(*) FROM employee.belonging_division WHERE employee_id = ?`,
+		`SELECT COUNT(*) FROM employee.belonging_team WHERE employee_id = ?`,
+	}
+	for _, q := range checks {
+		var cnt int
+		if err := db.QueryRow(q, employeeID).Scan(&cnt); err != nil {
+			t.Fatalf("failed to check belonging cleanup: %v", err)
+		}
+		if cnt != 0 {
+			t.Fatalf("belonging records should be removed. query=%s employee_id=%d count=%d", q, employeeID, cnt)
+		}
+	}
+}
+
+func assertContactState(t *testing.T, db *sql.DB, employeeID, expectedActive, expectedLeave, expectedRetired int) {
+	t.Helper()
+
+	var activeCnt int
+	if err := db.QueryRow(`
+SELECT COUNT(*)
+  FROM employee.active_employee_contact_information a
+  INNER JOIN employee.employee_contact_information eci
+    ON eci.employee_contact_information_id = a.employee_contact_information_id
+ WHERE eci.employee_id = ?`, employeeID).Scan(&activeCnt); err != nil {
+		t.Fatalf("failed to check active contact count: %v", err)
+	}
+	if activeCnt != expectedActive {
+		t.Fatalf("unexpected active contact count. got=%d want=%d", activeCnt, expectedActive)
+	}
+
+	var leaveCnt int
+	if err := db.QueryRow(`
+SELECT COUNT(*)
+  FROM employee.contact_information_for_staff_on_leave l
+  INNER JOIN employee.employee_contact_information eci
+    ON eci.employee_contact_information_id = l.employee_contact_information_id
+ WHERE eci.employee_id = ?`, employeeID).Scan(&leaveCnt); err != nil {
+		t.Fatalf("failed to check leave contact count: %v", err)
+	}
+	if leaveCnt != expectedLeave {
+		t.Fatalf("unexpected leave contact count. got=%d want=%d", leaveCnt, expectedLeave)
+	}
+
+	var retiredCnt int
+	if err := db.QueryRow(`
+SELECT COUNT(*)
+  FROM employee.retired_employee_contact_information r
+  INNER JOIN employee.employee_contact_information eci
+    ON eci.employee_contact_information_id = r.employee_contact_information_id
+ WHERE eci.employee_id = ?`, employeeID).Scan(&retiredCnt); err != nil {
+		t.Fatalf("failed to check retired contact count: %v", err)
+	}
+	if retiredCnt != expectedRetired {
+		t.Fatalf("unexpected retired contact count. got=%d want=%d", retiredCnt, expectedRetired)
 	}
 }
