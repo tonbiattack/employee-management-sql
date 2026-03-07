@@ -25,8 +25,37 @@ type TransitionActiveToRetiredInput struct {
 }
 
 type TransitionRetiredToActiveInput struct {
-	EmployeeID        int
-	ReinstatementDate string
+	EmployeeID             int
+	ReinstatementDate      string
+	ReinstatedCompanyID    int
+	ReinstatedCompanyEmail string
+	ReinstatedCompanyPhone string
+}
+
+type AssignEmployeeToProjectInput struct {
+	EmployeeID     int
+	ProjectID      int
+	AssignmentDate string
+}
+
+type ChangeCurrentPositionInput struct {
+	EmployeeID     int
+	PositionID     int
+	AssumptionDate string
+}
+
+type RegisterEvaluationInput struct {
+	EmployeeID int
+	Year       int
+	Quarter    int
+	Comment    string
+	Evaluation int
+}
+
+type TransferOrganizationBelongingInput struct {
+	TargetType    string
+	SourceID      int
+	DestinationID int
 }
 
 func NewEmployeeStatusTransitionUsecase(db *gorm.DB) *EmployeeStatusTransitionUsecase {
@@ -320,6 +349,240 @@ func (u *EmployeeStatusTransitionUsecase) TransitionRetiredToActive(ctx context.
 			return fmt.Errorf("insert reinstatement event: %w", err)
 		}
 
+		// 復職時は必要に応じて所属会社を再設定する。
+		if in.ReinstatedCompanyID > 0 {
+			if err := tx.Exec(
+				`INSERT INTO employee.belonging_company (company_id, employee_id)
+				 SELECT ?, ?
+				 WHERE NOT EXISTS (
+				     SELECT 1
+				       FROM employee.belonging_company
+				      WHERE employee_id = ?
+				 )`,
+				in.ReinstatedCompanyID, in.EmployeeID, in.EmployeeID,
+			).Error; err != nil {
+				return fmt.Errorf("restore belonging company: %w", err)
+			}
+			if err := tx.Exec(
+				`INSERT INTO employee.company_assignment (company_id, employee_id, company_assignment_date)
+				 SELECT ?, ?, ?
+				 WHERE NOT EXISTS (
+				     SELECT 1
+				       FROM employee.company_assignment
+				      WHERE employee_id = ?
+				        AND company_id = ?
+				        AND company_assignment_date = ?
+				 )`,
+				in.ReinstatedCompanyID, in.EmployeeID, in.ReinstatementDate,
+				in.EmployeeID, in.ReinstatedCompanyID, in.ReinstatementDate,
+			).Error; err != nil {
+				return fmt.Errorf("insert company assignment: %w", err)
+			}
+		}
+
+		// 復職時は現役連絡先を再作成し、休職/退職連絡先を解除する。
+		var contact struct {
+			EmployeeContactInformationID int    `gorm:"column:employee_contact_information_id"`
+			PrivateEmail                 string `gorm:"column:private_email"`
+		}
+		if err := tx.Raw(
+			`SELECT employee_contact_information_id, private_email
+			   FROM employee.employee_contact_information
+			  WHERE employee_id = ?
+			  ORDER BY employee_contact_information_id
+			  LIMIT 1`,
+			in.EmployeeID,
+		).Scan(&contact).Error; err != nil {
+			return fmt.Errorf("select employee contact: %w", err)
+		}
+		if contact.EmployeeContactInformationID != 0 {
+			companyPhone := in.ReinstatedCompanyPhone
+			if companyPhone == "" {
+				companyPhone = "000-0000-0000"
+			}
+			companyEmail := in.ReinstatedCompanyEmail
+			if companyEmail == "" {
+				companyEmail = contact.PrivateEmail
+			}
+			if err := tx.Exec(
+				`INSERT INTO employee.active_employee_contact_information (employee_contact_information_id, company_phone_number, company_email)
+				 SELECT ?, ?, ?
+				 WHERE NOT EXISTS (
+				     SELECT 1
+				       FROM employee.active_employee_contact_information
+				      WHERE employee_contact_information_id = ?
+				 )`,
+				contact.EmployeeContactInformationID, companyPhone, companyEmail, contact.EmployeeContactInformationID,
+			).Error; err != nil {
+				return fmt.Errorf("restore active contact info: %w", err)
+			}
+			if err := tx.Exec(
+				`DELETE l
+				   FROM employee.contact_information_for_staff_on_leave l
+				  WHERE l.employee_contact_information_id = ?`,
+				contact.EmployeeContactInformationID,
+			).Error; err != nil {
+				return fmt.Errorf("remove leave contact info on reinstatement: %w", err)
+			}
+			if err := tx.Exec(
+				`DELETE r
+				   FROM employee.retired_employee_contact_information r
+				  WHERE r.employee_contact_information_id = ?`,
+				contact.EmployeeContactInformationID,
+			).Error; err != nil {
+				return fmt.Errorf("remove retired contact info on reinstatement: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+func (u *EmployeeStatusTransitionUsecase) AssignEmployeeToProject(ctx context.Context, in AssignEmployeeToProjectInput) error {
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		status, err := lockAndGetEmployeeStatus(tx, in.EmployeeID)
+		if err != nil {
+			return err
+		}
+		if status != 1 {
+			return fmt.Errorf("employee is not active: employee_id=%d status=%d", in.EmployeeID, status)
+		}
+		if exists, err := existsByQuery(tx, `SELECT EXISTS (SELECT 1 FROM employee.belonging_project WHERE employee_id = ?)`, in.EmployeeID); err != nil {
+			return err
+		} else if exists {
+			return fmt.Errorf("employee is already assigned to project: employee_id=%d", in.EmployeeID)
+		}
+		if err := tx.Exec(
+			`INSERT INTO employee.assignment_project (assignment_project_date, project_id, employee_id)
+			 SELECT ?, ?, ?
+			 WHERE NOT EXISTS (
+			     SELECT 1
+			       FROM employee.assignment_project
+			      WHERE employee_id = ?
+			        AND project_id = ?
+			        AND assignment_project_date = ?
+			 )`,
+			in.AssignmentDate, in.ProjectID, in.EmployeeID,
+			in.EmployeeID, in.ProjectID, in.AssignmentDate,
+		).Error; err != nil {
+			return fmt.Errorf("insert assignment project event: %w", err)
+		}
+		if err := tx.Exec(
+			`INSERT INTO employee.belonging_project (project_id, employee_id)
+			 VALUES (?, ?)`,
+			in.ProjectID, in.EmployeeID,
+		).Error; err != nil {
+			return fmt.Errorf("insert belonging project: %w", err)
+		}
+		return nil
+	})
+}
+
+func (u *EmployeeStatusTransitionUsecase) ChangeCurrentPosition(ctx context.Context, in ChangeCurrentPositionInput) error {
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		status, err := lockAndGetEmployeeStatus(tx, in.EmployeeID)
+		if err != nil {
+			return err
+		}
+		if status != 1 {
+			return fmt.Errorf("employee is not active: employee_id=%d status=%d", in.EmployeeID, status)
+		}
+		if exists, err := existsByQuery(tx, `SELECT EXISTS (SELECT 1 FROM employee.position WHERE position_id = ?)`, in.PositionID); err != nil {
+			return err
+		} else if !exists {
+			return fmt.Errorf("position not found: position_id=%d", in.PositionID)
+		}
+		if err := tx.Exec(`DELETE FROM employee.current_position WHERE employee_id = ?`, in.EmployeeID).Error; err != nil {
+			return fmt.Errorf("delete current position: %w", err)
+		}
+		if err := tx.Exec(
+			`INSERT INTO employee.current_position (position_id, employee_id)
+			 VALUES (?, ?)`,
+			in.PositionID, in.EmployeeID,
+		).Error; err != nil {
+			return fmt.Errorf("insert current position: %w", err)
+		}
+		if err := tx.Exec(
+			`INSERT INTO employee.assumption_of_position (position_id, employee_id, assumption_of_position_date)
+			 SELECT ?, ?, ?
+			 WHERE NOT EXISTS (
+			     SELECT 1
+			       FROM employee.assumption_of_position
+			      WHERE employee_id = ?
+			        AND position_id = ?
+			        AND assumption_of_position_date = ?
+			 )`,
+			in.PositionID, in.EmployeeID, in.AssumptionDate,
+			in.EmployeeID, in.PositionID, in.AssumptionDate,
+		).Error; err != nil {
+			return fmt.Errorf("insert assumption of position event: %w", err)
+		}
+		return nil
+	})
+}
+
+func (u *EmployeeStatusTransitionUsecase) RegisterEvaluation(ctx context.Context, in RegisterEvaluationInput) error {
+	if in.Quarter < 1 || in.Quarter > 4 {
+		return fmt.Errorf("invalid quarter: %d", in.Quarter)
+	}
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		status, err := lockAndGetEmployeeStatus(tx, in.EmployeeID)
+		if err != nil {
+			return err
+		}
+		if status != 1 {
+			return fmt.Errorf("employee is not active: employee_id=%d status=%d", in.EmployeeID, status)
+		}
+		if exists, err := existsByQuery(
+			tx,
+			`SELECT EXISTS (
+			     SELECT 1
+			       FROM employee.evaluation
+			      WHERE employee_id = ?
+			        AND year = ?
+			        AND quarter = ?
+			 )`,
+			in.EmployeeID, in.Year, in.Quarter,
+		); err != nil {
+			return err
+		} else if exists {
+			return fmt.Errorf("evaluation already exists: employee_id=%d year=%d quarter=%d", in.EmployeeID, in.Year, in.Quarter)
+		}
+		if err := tx.Exec(
+			`INSERT INTO employee.evaluation (year, quarter, comment, evaluation, employee_id)
+			 VALUES (?, ?, ?, ?, ?)`,
+			in.Year, in.Quarter, in.Comment, in.Evaluation, in.EmployeeID,
+		).Error; err != nil {
+			return fmt.Errorf("insert evaluation: %w", err)
+		}
+		return nil
+	})
+}
+
+func (u *EmployeeStatusTransitionUsecase) TransferOrganizationBelonging(ctx context.Context, in TransferOrganizationBelongingInput) error {
+	if in.SourceID <= 0 || in.DestinationID <= 0 {
+		return fmt.Errorf("source/destination id must be positive")
+	}
+	if in.SourceID == in.DestinationID {
+		return nil
+	}
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		switch in.TargetType {
+		case "team":
+			if err := tx.Exec(`UPDATE employee.belonging_team SET team_id = ? WHERE team_id = ?`, in.DestinationID, in.SourceID).Error; err != nil {
+				return fmt.Errorf("transfer team belonging: %w", err)
+			}
+		case "division":
+			if err := tx.Exec(`UPDATE employee.belonging_division SET division_id = ? WHERE division_id = ?`, in.DestinationID, in.SourceID).Error; err != nil {
+				return fmt.Errorf("transfer division belonging: %w", err)
+			}
+		case "department":
+			if err := tx.Exec(`UPDATE employee.belonging_department SET department_id = ? WHERE department_id = ?`, in.DestinationID, in.SourceID).Error; err != nil {
+				return fmt.Errorf("transfer department belonging: %w", err)
+			}
+		default:
+			return fmt.Errorf("invalid target type: %s", in.TargetType)
+		}
 		return nil
 	})
 }
@@ -429,4 +692,12 @@ func clearActiveContactAndPassword(tx *gorm.DB, employeeID int) error {
 	}
 
 	return nil
+}
+
+func existsByQuery(tx *gorm.DB, query string, args ...any) (bool, error) {
+	var exists int
+	if err := tx.Raw(query, args...).Scan(&exists).Error; err != nil {
+		return false, fmt.Errorf("exists query failed: %w", err)
+	}
+	return exists == 1, nil
 }

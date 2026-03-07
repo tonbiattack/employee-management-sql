@@ -130,6 +130,95 @@ func TestEmployeeStatusTransitionBatchCommand(t *testing.T) {
 	})
 }
 
+func TestBasicBusinessUsecases(t *testing.T) {
+	t.Run("現役社員へ案件アサインできる", func(t *testing.T) {
+		db := openMySQLForTransitionTest(t)
+		prepareTransitionFixtures(t, db.SQL)
+		projectID := getOrCreateProjectID(t, db.SQL)
+		if _, err := db.SQL.Exec(`DELETE FROM employee.belonging_project WHERE employee_id = ?`, 1); err != nil {
+			t.Fatalf("failed to cleanup belonging project: %v", err)
+		}
+
+		uc := usecase.NewEmployeeStatusTransitionUsecase(db.GORM)
+		err := uc.AssignEmployeeToProject(context.Background(), usecase.AssignEmployeeToProjectInput{
+			EmployeeID:     1,
+			ProjectID:      projectID,
+			AssignmentDate: "2026-07-01",
+		})
+		if err != nil {
+			t.Fatalf("AssignEmployeeToProject() error: %v", err)
+		}
+
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.belonging_project WHERE employee_id = ? AND project_id = ?`, 1, projectID)
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.assignment_project WHERE employee_id = ? AND project_id = ? AND assignment_project_date = ?`, 1, projectID, "2026-07-01")
+	})
+
+	t.Run("現役社員の現在役職を変更できる", func(t *testing.T) {
+		db := openMySQLForTransitionTest(t)
+		prepareTransitionFixtures(t, db.SQL)
+		positionID := getOrCreatePositionID(t, db.SQL)
+
+		uc := usecase.NewEmployeeStatusTransitionUsecase(db.GORM)
+		err := uc.ChangeCurrentPosition(context.Background(), usecase.ChangeCurrentPositionInput{
+			EmployeeID:     1,
+			PositionID:     positionID,
+			AssumptionDate: "2026-07-15",
+		})
+		if err != nil {
+			t.Fatalf("ChangeCurrentPosition() error: %v", err)
+		}
+
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.current_position WHERE employee_id = ? AND position_id = ?`, 1, positionID)
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.assumption_of_position WHERE employee_id = ? AND position_id = ? AND assumption_of_position_date = ?`, 1, positionID, "2026-07-15")
+	})
+
+	t.Run("現役社員の評価を四半期単位で登録できる", func(t *testing.T) {
+		db := openMySQLForTransitionTest(t)
+		prepareTransitionFixtures(t, db.SQL)
+		if _, err := db.SQL.Exec(`DELETE FROM employee.evaluation WHERE employee_id = ? AND year = ? AND quarter = ?`, 1, 2026, 2); err != nil {
+			t.Fatalf("failed to cleanup evaluation fixture: %v", err)
+		}
+
+		uc := usecase.NewEmployeeStatusTransitionUsecase(db.GORM)
+		err := uc.RegisterEvaluation(context.Background(), usecase.RegisterEvaluationInput{
+			EmployeeID: 1,
+			Year:       2026,
+			Quarter:    2,
+			Comment:    "integration",
+			Evaluation: 4,
+		})
+		if err != nil {
+			t.Fatalf("RegisterEvaluation() error: %v", err)
+		}
+
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.evaluation WHERE employee_id = ? AND year = ? AND quarter = ?`, 1, 2026, 2)
+	})
+
+	t.Run("所属チームを移管できる", func(t *testing.T) {
+		db := openMySQLForTransitionTest(t)
+		prepareTransitionFixtures(t, db.SQL)
+		sourceTeamID, destinationTeamID := getOrCreateTwoTeamIDs(t, db.SQL)
+		if _, err := db.SQL.Exec(`DELETE FROM employee.belonging_team WHERE employee_id = ?`, 1); err != nil {
+			t.Fatalf("failed to cleanup team belonging: %v", err)
+		}
+		if _, err := db.SQL.Exec(`INSERT INTO employee.belonging_team(team_id, employee_id) VALUES (?, ?)`, sourceTeamID, 1); err != nil {
+			t.Fatalf("failed to setup source team belonging: %v", err)
+		}
+
+		uc := usecase.NewEmployeeStatusTransitionUsecase(db.GORM)
+		err := uc.TransferOrganizationBelonging(context.Background(), usecase.TransferOrganizationBelongingInput{
+			TargetType:    "team",
+			SourceID:      sourceTeamID,
+			DestinationID: destinationTeamID,
+		})
+		if err != nil {
+			t.Fatalf("TransferOrganizationBelonging() error: %v", err)
+		}
+
+		assertCountByQuery(t, db.SQL, `SELECT COUNT(*) FROM employee.belonging_team WHERE employee_id = ? AND team_id = ?`, 1, destinationTeamID)
+	})
+}
+
 // テストでSQL検証とGORMユースケース呼び出しを両立するため、両接続を保持する。
 type transitionTestDB struct {
 	SQL  *sql.DB
@@ -324,6 +413,173 @@ func assertRetiredEmployee(t *testing.T, db *sql.DB, employeeID int, expectedRet
 	if returningPermission != expectedReturningPermission {
 		t.Fatalf("unexpected returning permission. got=%t want=%t", returningPermission, expectedReturningPermission)
 	}
+}
+
+func assertCountByQuery(t *testing.T, db *sql.DB, query string, args ...any) {
+	t.Helper()
+
+	var cnt int
+	if err := db.QueryRow(query, args...).Scan(&cnt); err != nil {
+		t.Fatalf("failed to query count: %v", err)
+	}
+	if cnt != 1 {
+		t.Fatalf("unexpected count. got=%d want=1 query=%s", cnt, query)
+	}
+}
+
+func getOrCreateProjectID(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	var projectID int
+	if err := db.QueryRow(`SELECT project_id FROM employee.project ORDER BY project_id LIMIT 1`).Scan(&projectID); err == nil {
+		return projectID
+	}
+
+	bpID := getOrCreateBusinessPartnerID(t, db)
+	res, err := db.Exec(`INSERT INTO employee.project(project_code, project_start_date, project_content, business_partner_id) VALUES (?, ?, ?, ?)`,
+		"PRJ-TEST-001", "2026-01-01", "test project", bpID)
+	if err != nil {
+		t.Fatalf("failed to insert project fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch project id: %v", err)
+	}
+	return int(id)
+}
+
+func getOrCreatePositionID(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	var positionID int
+	if err := db.QueryRow(`SELECT position_id FROM employee.position ORDER BY position_id LIMIT 1`).Scan(&positionID); err == nil {
+		return positionID
+	}
+	res, err := db.Exec(`INSERT INTO employee.position(position_code, position_name) VALUES (?, ?)`, "POS-TEST-001", "Test Position")
+	if err != nil {
+		t.Fatalf("failed to insert position fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch position id: %v", err)
+	}
+	return int(id)
+}
+
+func getOrCreateTwoTeamIDs(t *testing.T, db *sql.DB) (int, int) {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT team_id FROM employee.team ORDER BY team_id LIMIT 2`)
+	if err != nil {
+		t.Fatalf("failed to select teams: %v", err)
+	}
+	defer rows.Close()
+	ids := make([]int, 0, 2)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("failed to scan team id: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) >= 2 {
+		return ids[0], ids[1]
+	}
+
+	divisionID := getOrCreateDivisionID(t, db)
+	for len(ids) < 2 {
+		res, err := db.Exec(`INSERT INTO employee.team(division_id, team_code, team_name) VALUES (?, ?, ?)`,
+			divisionID, fmt.Sprintf("TEAM-TEST-%03d", len(ids)+1), fmt.Sprintf("Test Team %d", len(ids)+1))
+		if err != nil {
+			t.Fatalf("failed to insert team fixture: %v", err)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			t.Fatalf("failed to fetch team id: %v", err)
+		}
+		ids = append(ids, int(id))
+	}
+	return ids[0], ids[1]
+}
+
+func getOrCreateDivisionID(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	var divisionID int
+	if err := db.QueryRow(`SELECT division_id FROM employee.division ORDER BY division_id LIMIT 1`).Scan(&divisionID); err == nil {
+		return divisionID
+	}
+
+	companyID := getOrCreateCompanyID(t, db)
+	departmentID := getOrCreateDepartmentID(t, db, companyID)
+	businessPartnerID := getOrCreateBusinessPartnerID(t, db)
+	res, err := db.Exec(`INSERT INTO employee.division(department_id, division_code, division_name, business_partner_id) VALUES (?, ?, ?, ?)`,
+		departmentID, "DIV-TEST-001", "Test Division", businessPartnerID)
+	if err != nil {
+		t.Fatalf("failed to insert division fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch division id: %v", err)
+	}
+	return int(id)
+}
+
+func getOrCreateDepartmentID(t *testing.T, db *sql.DB, companyID int) int {
+	t.Helper()
+
+	var departmentID int
+	if err := db.QueryRow(`SELECT department_id FROM employee.department ORDER BY department_id LIMIT 1`).Scan(&departmentID); err == nil {
+		return departmentID
+	}
+	res, err := db.Exec(`INSERT INTO employee.department(company_id, department_code, department_name) VALUES (?, ?, ?)`,
+		companyID, "DEP-TEST-001", "Test Department")
+	if err != nil {
+		t.Fatalf("failed to insert department fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch department id: %v", err)
+	}
+	return int(id)
+}
+
+func getOrCreateCompanyID(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	var companyID int
+	if err := db.QueryRow(`SELECT company_id FROM employee.company ORDER BY company_id LIMIT 1`).Scan(&companyID); err == nil {
+		return companyID
+	}
+	res, err := db.Exec(`INSERT INTO employee.company(company_code, company_name, company_business_content) VALUES (?, ?, ?)`,
+		"COMP-TEST-001", "Test Company", "Test Content")
+	if err != nil {
+		t.Fatalf("failed to insert company fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch company id: %v", err)
+	}
+	return int(id)
+}
+
+func getOrCreateBusinessPartnerID(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	var bpID int
+	if err := db.QueryRow(`SELECT business_partner_id FROM employee.business_partner ORDER BY business_partner_id LIMIT 1`).Scan(&bpID); err == nil {
+		return bpID
+	}
+	res, err := db.Exec(`INSERT INTO employee.business_partner(business_partner_code, business_partner_name) VALUES (?, ?)`,
+		"BP-TEST-001", "Test Business Partner")
+	if err != nil {
+		t.Fatalf("failed to insert business partner fixture: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to fetch business partner id: %v", err)
+	}
+	return int(id)
 }
 
 func assertNoBelongingOrg(t *testing.T, db *sql.DB, employeeID int) {
