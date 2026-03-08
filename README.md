@@ -109,7 +109,7 @@ https://github.com/tonbiattack/employee-management
 - `NULL` を含む検索は複雑化しやすいため、`IS NULL` 条件を共通化した検索SQLを用意して運用します。
 
 ## 実装処理一覧
-- 実装済みの業務処理・バッチコマンド一覧: [docs/implemented-processing-list.md](docs/implemented-processing-list.md)
+- 実装済みの業務処理・バッチコマンド一覧: [doc/implemented-processing-list.md](doc/implemented-processing-list.md)
 
 ## すぐ動かす
 

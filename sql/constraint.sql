@@ -160,9 +160,6 @@ alter table retired_employee_contact_information
 alter table retirement
   add constraint retirement_FK1 foreign key (employee_id) references employee(employee_id);
 
-alter table role
-  add constraint role_FK1 foreign key (password_id) references password(password_id);
-
 alter table team
   add constraint team_FK1 foreign key (division_id) references division(division_id);
 
@@ -246,6 +243,10 @@ alter table contact_information_for_staff_on_leave
 
 alter table retired_employee_contact_information
   add constraint retired_employee_contact_information_UK1 unique (employee_contact_information_id);
+
+-- 退職状態テーブルは社員単位で1件に制限する。
+alter table retired_employee
+  add constraint retired_employee_UK1 unique (employee_id);
 
 -- 同一社員・同一期間の評価重複を防止する。
 alter table evaluation
@@ -331,5 +332,24 @@ alter table employee_infrastructure_skill
 
 alter table employee_programming_skill
   add constraint employee_programming_skill_CK1 check (skill_level between 1 and 10);
+
+-- 期間検索の性能劣化を防ぐための業務インデックス。
+create index company_assignment_IDX1
+  on company_assignment (employee_id, company_assignment_end_date, company_assignment_date);
+
+create index assigned_department_IDX1
+  on assigned_department (employee_id, assigned_department_end_date, assigned_department_date);
+
+create index assigned_division_IDX1
+  on assigned_division (employee_id, assigned_division_end_date, assigned_division_date);
+
+create index assigned_team_IDX1
+  on assigned_team (employee_id, assigned_team_end_date, assigned_team_date);
+
+create index assignment_project_IDX1
+  on assignment_project (employee_id, assignment_project_end_date, assignment_project_date);
+
+create index assumption_of_position_IDX1
+  on assumption_of_position (employee_id, assumption_of_position_end_date, assumption_of_position_date);
 
 

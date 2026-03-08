@@ -1193,6 +1193,10 @@ alter table employee.contact_information_for_staff_on_leave
 alter table employee.retired_employee_contact_information
   add constraint retired_employee_contact_information_UK1 unique (employee_contact_information_id);
 
+-- 退職状態テーブルは社員単位で1件に制限する。
+alter table employee.retired_employee
+  add constraint retired_employee_UK1 unique (employee_id);
+
 -- 同一社員・同一期間の評価重複を防止する。
 alter table employee.evaluation
   add constraint evaluation_UK1 unique (employee_id, year, quarter);
@@ -1273,4 +1277,23 @@ alter table employee.employee_infrastructure_skill
 
 alter table employee.employee_programming_skill
   add constraint employee_programming_skill_CK1 check (skill_level between 1 and 10);
+
+-- 期間検索の性能劣化を防ぐための業務インデックス。
+create index company_assignment_IDX1
+  on employee.company_assignment (employee_id, company_assignment_end_date, company_assignment_date);
+
+create index assigned_department_IDX1
+  on employee.assigned_department (employee_id, assigned_department_end_date, assigned_department_date);
+
+create index assigned_division_IDX1
+  on employee.assigned_division (employee_id, assigned_division_end_date, assigned_division_date);
+
+create index assigned_team_IDX1
+  on employee.assigned_team (employee_id, assigned_team_end_date, assigned_team_date);
+
+create index assignment_project_IDX1
+  on employee.assignment_project (employee_id, assignment_project_end_date, assignment_project_date);
+
+create index assumption_of_position_IDX1
+  on employee.assumption_of_position (employee_id, assumption_of_position_end_date, assumption_of_position_date);
 

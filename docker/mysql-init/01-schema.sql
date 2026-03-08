@@ -354,6 +354,7 @@ create table retired_employee (
   , employee_id integer not null
   , returning_permission boolean not null
   , constraint retired_employee_PKC primary key (retired_employee_id)
+  , constraint retired_employee_UK1 unique (employee_id)
 ) ;
 
 -- 退職社員連絡先
@@ -685,9 +686,6 @@ alter table reinstatement
 alter table retired_employee
   add constraint retired_employee_FK1 foreign key (employee_id) references employee(employee_id);
 
-alter table retired_employee
-  add constraint retired_employee_FK2 foreign key (retired_employee_id) references employee(employee_id);
-
 alter table retired_employee_contact_information
   add constraint retired_employee_contact_information_FK1 foreign key (employee_contact_information_id) references employee_contact_information(employee_contact_information_id);
 
@@ -696,6 +694,24 @@ alter table retirement
 
 alter table team
   add constraint team_FK1 foreign key (division_id) references division(division_id);
+
+create index company_assignment_IDX1
+  on company_assignment (employee_id, company_assignment_end_date, company_assignment_date);
+
+create index assigned_department_IDX1
+  on assigned_department (employee_id, assigned_department_end_date, assigned_department_date);
+
+create index assigned_division_IDX1
+  on assigned_division (employee_id, assigned_division_end_date, assigned_division_date);
+
+create index assigned_team_IDX1
+  on assigned_team (employee_id, assigned_team_end_date, assigned_team_date);
+
+create index assignment_project_IDX1
+  on assignment_project (employee_id, assignment_project_end_date, assignment_project_date);
+
+create index assumption_of_position_IDX1
+  on assumption_of_position (employee_id, assumption_of_position_end_date, assumption_of_position_date);
 
 
 
