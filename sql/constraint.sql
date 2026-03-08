@@ -3,6 +3,10 @@
 -- 目的: このSQLの実行内容を明示するためのヘッダーコメント
 -- 備考: 必要に応じて詳細な業務目的・前提条件を追記してください
 -- ========================================
+-- 実行前提:
+--   - PostgreSQL で実行する
+--   - employee スキーマを対象にする
+set search_path to employee, public;
 
 alter table active_employee_contact_information
   add constraint active_employee_contact_information_FK1 foreign key (employee_contact_information_id) references employee_contact_information(employee_contact_information_id);
@@ -196,7 +200,7 @@ alter table team
   add constraint team_UK1 unique (division_id, team_code);
 
 -- ロール名は権限の識別子であり同名ロール重複を防ぐ。
-alter table role
+alter table "role"
   add constraint role_UK1 unique (role_name);
 
 -- 役職コードは役職マスタの識別子であり重複不可。

@@ -1,6 +1,7 @@
 DROP SCHEMA IF EXISTS employee CASCADE;
 CREATE SCHEMA employee;
 SET search_path TO employee;
+-- 注意: このファイルの正本は sql/all.sql。構造変更は先に sql/all.sql を更新すること。
 -- ========================================
 -- SQLファイル: spring_boot_resources/schema.sql
 -- 目的: このSQLの実行内容を明示するためのヘッダーコメント

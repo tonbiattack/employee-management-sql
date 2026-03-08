@@ -23,7 +23,7 @@ services:
       # 既存データがある場合は再実行されない（再投入したい場合は `docker compose down -v` が必要）。
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
   # MySQL 検証用のコンテナ。
-  # bootstrap-db.ps1 側で PostgreSQL 由来のSQLを変換して流し込む前提。
+  # docker/mysql-init/*.sql を初回起動時に自動実行して初期化する。
   mysql:
     image: mysql:8.4
     container_name: employee-management-mysql

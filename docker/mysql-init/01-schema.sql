@@ -2,6 +2,7 @@ DROP DATABASE IF EXISTS employee;
 CREATE DATABASE employee CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE employee;
 SET FOREIGN_KEY_CHECKS = 0;
+-- 注意: このファイルの正本は sql/all.sql。構造変更は先に sql/all.sql を更新すること。
 -- ========================================
 -- SQLファイル: spring_boot_resources/schema.sql
 -- 目的: このSQLの実行内容を明示するためのヘッダーコメント

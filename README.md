@@ -7,10 +7,18 @@ https://github.com/tonbiattack/employee-management
 ## 取り込んだSQL
 
 - `sql/*.sql`
-  - Spring プロジェクト直下 `sql/` の検索系SQLなど
-- `sql/spring_boot_resources/*.sql`
-  - Spring プロジェクト `src/main/resources/*.sql` のSQL
-  - `schema.sql` / `data.sql` / テーブル別SQL
+  - このリポジトリで運用する SQL（DDL・検索SQL・補助SQL）
+
+## DDLの正本と運用
+
+- 正本（手修正対象）: `sql/all.sql`
+- 制約追加用（PostgreSQL手動適用用）: `sql/constraint.sql`
+- Docker初期化SQL（`docker/*-init/*.sql`）は正本からの反映先として扱う
+
+運用ルール:
+- スキーマ変更はまず `sql/all.sql` を更新する
+- その後、`docker/postgres-init/01-schema.sql` / `docker/mysql-init/01-schema.sql` へ同期する
+- `sql/constraint.sql` は PostgreSQL 前提（`search_path=employee`）で実行する
 
 ## データ投入の流れ（ER図の代替）
 
@@ -51,8 +59,6 @@ https://github.com/tonbiattack/employee-management
 - `assigned_team`（`assigned_team_date` / `assigned_team_end_date`）
 - `assignment_project`（`assignment_project_date` / `assignment_project_end_date`）
 - `assumption_of_position`（`assumption_of_position_date` / `assumption_of_position_end_date`）
-- `assumption_of_position`
-- `assignment_project`, `assigned_department`, `assigned_division`, `assigned_team`
 - `leave_of_absence`, `reinstatement`, `retirement`, `retired_employee`
 - `contact_information_for_staff_on_leave`, `retired_employee_contact_information`
 - `evaluation`, `employee_project_record`, `project_completion_report`
@@ -168,8 +174,7 @@ docker compose up -d
 
 - PostgreSQL 初期化SQL: `docker/postgres-init/01-schema.sql` → `02-data.sql`
 - MySQL 初期化SQL: `docker/mysql-init/01-schema.sql` → `02-data.sql`
-- MySQL 初期化SQLは、元の `sql/spring_boot_resources/schema.sql` / `data.sql` を投入可能な形へ変換した内容です。
-- `scripts/bootstrap-db.ps1` は手動投入・検証用として残しています（Dockerだけでの初期化には不要）。
+- `scripts/bootstrap-db.ps1` は手動投入・検証用として残しています（PostgreSQL は `sql/all.sql`、MySQL は `docker/mysql-init/*.sql` を実行）。
 
 ## 追加SQL（MySQL）
 

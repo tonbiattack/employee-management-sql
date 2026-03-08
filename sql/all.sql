@@ -64,6 +64,7 @@ create table active_employee_contact_information (
   , company_phone_number character varying(21) not null
   , company_email character varying(256) not null
   , constraint active_employee_contact_information_PKC primary key (active_employee_contact_information_id)
+  , constraint active_employee_contact_information_UK1 unique (employee_contact_information_id)
 ) ;
 
 -- 配属部署
@@ -76,6 +77,10 @@ create table assigned_department (
   , assigned_department_date date not null
   , assigned_department_end_date date
   , constraint assigned_department_PKC primary key (assigned_department_id)
+  , constraint assigned_department_CK1 check (
+      assigned_department_end_date is null
+      or assigned_department_date <= assigned_department_end_date
+    )
 ) ;
 
 -- 配属課
@@ -88,6 +93,10 @@ create table assigned_division (
   , assigned_division_date date not null
   , assigned_division_end_date date
   , constraint assigned_division_PKC primary key (assigned_division_id)
+  , constraint assigned_division_CK1 check (
+      assigned_division_end_date is null
+      or assigned_division_date <= assigned_division_end_date
+    )
 ) ;
 
 -- 配属チーム
@@ -100,6 +109,10 @@ create table assigned_team (
   , assigned_team_date date not null
   , assigned_team_end_date date
   , constraint assigned_team_PKC primary key (assigned_team_id)
+  , constraint assigned_team_CK1 check (
+      assigned_team_end_date is null
+      or assigned_team_date <= assigned_team_end_date
+    )
 ) ;
 
 -- 配属案件
@@ -112,6 +125,10 @@ create table assignment_project (
   , project_id integer not null
   , employee_id integer not null
   , constraint assignment_project_PKC primary key (assignment_project_id)
+  , constraint assignment_project_CK1 check (
+      assignment_project_end_date is null
+      or assignment_project_date <= assignment_project_end_date
+    )
 ) ;
 
 -- 役職就任
@@ -124,6 +141,10 @@ create table assumption_of_position (
   , assumption_of_position_date date not null
   , assumption_of_position_end_date date
   , constraint assumption_of_position_PKC primary key (assumption_of_position_id)
+  , constraint assumption_of_position_CK1 check (
+      assumption_of_position_end_date is null
+      or assumption_of_position_date <= assumption_of_position_end_date
+    )
 ) ;
 
 -- 所属会社
@@ -134,6 +155,7 @@ create table belonging_company (
   , company_id integer not null
   , employee_id integer not null
   , constraint belonging_company_PKC primary key (belonging_company_id)
+  , constraint belonging_company_UK1 unique (employee_id)
 ) ;
 
 -- 所属部署
@@ -144,6 +166,7 @@ create table belonging_department (
   , department_id integer not null
   , employee_id integer not null
   , constraint belonging_department_PKC primary key (belonging_department_id)
+  , constraint belonging_department_UK1 unique (employee_id)
 ) ;
 
 -- 所属課
@@ -154,6 +177,7 @@ create table belonging_division (
   , division_id integer not null
   , employee_id integer not null
   , constraint belonging_division_PKC primary key (belonging_division_id)
+  , constraint belonging_division_UK1 unique (employee_id)
 ) ;
 
 -- 所属案件
@@ -164,6 +188,7 @@ create table belonging_project (
   , project_id integer not null
   , employee_id integer not null
   , constraint belonging_project_PKC primary key (belonging_project_id)
+  , constraint belonging_project_UK1 unique (employee_id)
 ) ;
 
 -- 所属チーム
@@ -174,6 +199,7 @@ create table belonging_team (
   , employee_id integer not null
   , team_id integer not null
   , constraint belonging_team_PKC primary key (belonging_team_id)
+  , constraint belonging_team_UK1 unique (employee_id)
 ) ;
 
 -- 会社配属
@@ -186,6 +212,11 @@ create table company_assignment (
   , company_assignment_date date not null
   , company_assignment_end_date date
   , constraint company_assignment_PKC primary key (company_assignment_id)
+  , constraint company_assignment_UK1 unique (employee_id, company_assignment_date)
+  , constraint company_assignment_CK1 check (
+      company_assignment_end_date is null
+      or company_assignment_date <= company_assignment_end_date
+    )
 ) ;
 
 -- 休職社員連絡先
@@ -196,6 +227,7 @@ create table contact_information_for_staff_on_leave (
   , employee_contact_information_id integer not null
   , company_email character varying(256) not null
   , constraint contact_information_for_staff_on_leave_PKC primary key (contact_information_for_staff_on_leave_id)
+  , constraint contact_information_for_staff_on_leave_UK1 unique (employee_contact_information_id)
 ) ;
 
 -- 現役職
@@ -228,6 +260,7 @@ create table employee_database_skill (
   , skill_level integer not null
   , employee_id integer not null
   , constraint employee_database_skill_PKC primary key (employee_database_skill_id)
+  , constraint employee_database_skill_CK1 check (skill_level between 1 and 10)
 ) ;
 
 -- 社員フレームワークスキル
@@ -239,6 +272,7 @@ create table employee_framework_skill (
   , skill_level integer not null
   , employee_id integer not null
   , constraint employee_framework_skill_PKC primary key (employee_framework_skill_id)
+  , constraint employee_framework_skill_CK1 check (skill_level between 1 and 10)
 ) ;
 
 -- 社員インフラスキル
@@ -250,6 +284,7 @@ create table employee_infrastructure_skill (
   , skill_level integer not null
   , employee_id integer not null
   , constraint employee_infrastructure_skill_PKC primary key (employee_infrastructure_skill_id)
+  , constraint employee_infrastructure_skill_CK1 check (skill_level between 1 and 10)
 ) ;
 
 -- 社員プログラミングスキル
@@ -261,6 +296,7 @@ create table employee_programming_skill (
   , skill_level integer not null
   , employee_id integer not null
   , constraint employee_programming_skill_PKC primary key (employee_programming_skill_id)
+  , constraint employee_programming_skill_CK1 check (skill_level between 1 and 10)
 ) ;
 
 -- 社員案件実績
@@ -287,6 +323,9 @@ create table evaluation (
   , evaluation integer not null
   , employee_id integer not null
   , constraint evaluation_PKC primary key (evaluation_id)
+  , constraint evaluation_UK1 unique (employee_id, year, quarter)
+  , constraint evaluation_CK1 check (quarter between 1 and 4)
+  , constraint evaluation_CK2 check (evaluation between 1 and 10)
 ) ;
 
 -- フレームワークスキル
@@ -296,6 +335,7 @@ create table framework_skill (
   framework_skill_id integer default nextval('framework_skill_id_seq') not null
   , framework_skill_name character varying(20) not null
   , constraint framework_skill_PKC primary key (framework_skill_id)
+  , constraint framework_skill_UK1 unique (framework_skill_name)
 ) ;
 
 -- インフラスキル
@@ -305,6 +345,7 @@ create table infrastructure_skill (
   infrastructure_skill_id integer default nextval('infrastructure_skill_id_seq') not null
   , infrastructure_skill_name character varying(20) not null
   , constraint infrastructure_skill_PKC primary key (infrastructure_skill_id)
+  , constraint infrastructure_skill_UK1 unique (infrastructure_skill_name)
 ) ;
 
 -- 入社
@@ -315,6 +356,7 @@ create table joining_the_company (
   , employee_id integer not null
   , joining_the_company_date date not null
   , constraint joining_the_company_PKC primary key (joining_the_company_id)
+  , constraint joining_the_company_UK1 unique (employee_id, joining_the_company_date)
 ) ;
 
 -- 休職
@@ -325,6 +367,7 @@ create table leave_of_absence (
   , employee_id integer not null
   , leave_of_absence_date date not null
   , constraint leave_of_absence_PKC primary key (leave_of_absence_id)
+  , constraint leave_of_absence_UK1 unique (employee_id, leave_of_absence_date)
 ) ;
 
 -- 役職
@@ -335,6 +378,7 @@ create table position (
   , position_code character varying(20) not null
   , position_name character varying(50) not null
   , constraint position_PKC primary key (position_id)
+  , constraint position_UK1 unique (position_code)
 ) ;
 
 -- プログラミングスキル
@@ -344,6 +388,7 @@ create table programming_skill (
   programming_skill_id integer default nextval('programming_skill_id_seq') not null
   , programming_skill_name character varying(20) not null
   , constraint programming_skill_PKC primary key (programming_skill_id)
+  , constraint programming_skill_UK1 unique (programming_skill_name)
 ) ;
 
 -- 案件完了報告
@@ -364,6 +409,7 @@ create table reinstatement (
   , employee_id integer not null
   , reinstatement_date date not null
   , constraint reinstatement_PKC primary key (reinstatement_id)
+  , constraint reinstatement_UK1 unique (employee_id, reinstatement_date)
 ) ;
 
 -- 退職社員
@@ -374,6 +420,7 @@ create table retired_employee (
   , employee_id integer not null
   , returning_permission boolean not null
   , constraint retired_employee_PKC primary key (retired_employee_id)
+  , constraint retired_employee_UK1 unique (employee_id)
 ) ;
 
 -- 退職社員連絡先
@@ -383,6 +430,7 @@ create table retired_employee_contact_information (
   retired_employee_contact_information_id integer default nextval('retired_employee_contact_information_id_seq') not null
   , employee_contact_information_id integer not null
   , constraint retired_employee_contact_information_PKC primary key (retired_employee_contact_information_id)
+  , constraint retired_employee_contact_information_UK1 unique (employee_contact_information_id)
 ) ;
 
 -- 退職
@@ -394,6 +442,7 @@ create table retirement (
   , retirement_reason text not null
   , retirement_date date not null
   , constraint retirement_PKC primary key (retirement_id)
+  , constraint retirement_UK1 unique (employee_id, retirement_date)
 ) ;
 
 -- 権限
@@ -403,6 +452,7 @@ create table role (
   role_id integer default nextval('role_id_seq') not null
   , role_name character varying(50) not null
   , constraint role_PKC primary key (role_id)
+  , constraint role_UK1 unique (role_name)
 ) ;
 
 -- チーム
@@ -414,6 +464,7 @@ create table team (
   , team_code character varying(30) not null
   , team_name character varying(70) not null
   , constraint team_PKC primary key (team_id)
+  , constraint team_UK1 unique (division_id, team_code)
 ) ;
 
 -- データベーススキル
@@ -423,6 +474,7 @@ create table database_skill (
   database_skill_id integer default nextval('database_skill_id_seq') not null
   , database_skill_name varchar(20) not null
   , constraint database_skill_PKC primary key (database_skill_id)
+  , constraint database_skill_UK1 unique (database_skill_name)
 ) ;
 
 -- 課
@@ -435,6 +487,7 @@ create table division (
   , division_name character varying(50) not null
   , business_partner_id integer not null
   , constraint division_PKC primary key (division_id)
+  , constraint division_UK1 unique (department_id, division_code)
 ) ;
 
 -- 社員連絡先
@@ -488,6 +541,7 @@ create table business_partner (
   , business_partner_code character varying(20) not null
   , business_partner_name character varying(50) not null
   , constraint business_partner_PKC primary key (business_partner_id)
+  , constraint business_partner_UK1 unique (business_partner_code)
 ) ;
 
 -- 部署
@@ -499,6 +553,7 @@ create table department (
   , department_code character varying(20) not null
   , department_name character varying(50) not null
   , constraint department_PKC primary key (department_id)
+  , constraint department_UK1 unique (company_id, department_code)
 ) ;
 
 -- 社員
@@ -517,6 +572,8 @@ create table employee (
   , grade integer not null
   , comment text not null
   , constraint employee_PKC primary key (employee_id)
+  , constraint employee_UK1 unique (employee_code)
+  , constraint employee_CK1 check (grade >= 1)
 ) ;
 
 -- 社員在籍区分
@@ -547,6 +604,7 @@ create table company (
   , company_name character varying(50) not null
   , company_business_content text not null
   , constraint company_PKC primary key (company_id)
+  , constraint company_UK1 unique (company_code)
 ) ;
 
 alter table active_employee_contact_information
@@ -1113,170 +1171,6 @@ insert into employee.company_assignment(company_id,employee_id,company_assignmen
   , (4,4,DATE '1999-09-25',NULL)
   , (5,5,DATE '1995-02-16',NULL)
   , (6,6,DATE '1992-06-01',NULL);
-
--- 追加: UNIQUE / CHECK 制約
--- このセクションの目的:
---   1) データ重複をDBレベルで防止する（UNIQUE）
---   2) 不正値の登録をDBレベルで防止する（CHECK）
---   3) アプリ側の実装ミスがあっても整合性を崩さない最終防衛線にする
-
--- 社員コードは社員を一意に識別する業務キーのため重複不可。
-alter table employee.employee
-  add constraint employee_UK1 unique (employee_code);
-
--- 会社コードはマスタ連携・画面表示で利用される識別子のため重複不可。
-alter table employee.company
-  add constraint company_UK1 unique (company_code);
-
--- 取引先コードは外部連携・参照で利用される識別子のため重複不可。
-alter table employee.business_partner
-  add constraint business_partner_UK1 unique (business_partner_code);
-
--- 部署コードは「会社内」で一意に管理する想定のため複合一意にする。
-alter table employee.department
-  add constraint department_UK1 unique (company_id, department_code);
-
--- 課コードは「部署内」で一意に管理する想定のため複合一意にする。
-alter table employee.division
-  add constraint division_UK1 unique (department_id, division_code);
-
--- チームコードは「課内」で一意に管理する想定のため複合一意にする。
-alter table employee.team
-  add constraint team_UK1 unique (division_id, team_code);
-
--- ロール名は権限の識別子であり同名ロール重複を防ぐ。
-alter table employee.role
-  add constraint role_UK1 unique (role_name);
-
--- 役職コードは役職マスタの識別子であり重複不可。
-alter table employee.position
-  add constraint position_UK1 unique (position_code);
-
--- スキルマスタ名は同義重複を防ぎ検索・集計の一貫性を保つため一意にする。
-alter table employee.database_skill
-  add constraint database_skill_UK1 unique (database_skill_name);
-
-alter table employee.framework_skill
-  add constraint framework_skill_UK1 unique (framework_skill_name);
-
-alter table employee.infrastructure_skill
-  add constraint infrastructure_skill_UK1 unique (infrastructure_skill_name);
-
-alter table employee.programming_skill
-  add constraint programming_skill_UK1 unique (programming_skill_name);
-
--- 現在所属は社員ごとに1件を想定するため employee_id を一意にする。
--- （履歴は company_assignment など履歴テーブル側で管理する）
-alter table employee.belonging_company
-  add constraint belonging_company_UK1 unique (employee_id);
-
-alter table employee.belonging_department
-  add constraint belonging_department_UK1 unique (employee_id);
-
-alter table employee.belonging_division
-  add constraint belonging_division_UK1 unique (employee_id);
-
-alter table employee.belonging_team
-  add constraint belonging_team_UK1 unique (employee_id);
-
-alter table employee.belonging_project
-  add constraint belonging_project_UK1 unique (employee_id);
-
--- 連絡先ロールテーブルは同一連絡先の重複登録を防ぐ。
--- （現役/休職/退職のどこに属するかは状態遷移ロジックで制御）
-alter table employee.active_employee_contact_information
-  add constraint active_employee_contact_information_UK1 unique (employee_contact_information_id);
-
-alter table employee.contact_information_for_staff_on_leave
-  add constraint contact_information_for_staff_on_leave_UK1 unique (employee_contact_information_id);
-
-alter table employee.retired_employee_contact_information
-  add constraint retired_employee_contact_information_UK1 unique (employee_contact_information_id);
-
--- 退職状態テーブルは社員単位で1件に制限する。
-alter table employee.retired_employee
-  add constraint retired_employee_UK1 unique (employee_id);
-
--- 同一社員・同一期間の評価重複を防止する。
-alter table employee.evaluation
-  add constraint evaluation_UK1 unique (employee_id, year, quarter);
-
--- 入社/休職/復職/退職/配属履歴は同日重複イベントを防止する。
-alter table employee.joining_the_company
-  add constraint joining_the_company_UK1 unique (employee_id, joining_the_company_date);
-
-alter table employee.leave_of_absence
-  add constraint leave_of_absence_UK1 unique (employee_id, leave_of_absence_date);
-
-alter table employee.reinstatement
-  add constraint reinstatement_UK1 unique (employee_id, reinstatement_date);
-
-alter table employee.retirement
-  add constraint retirement_UK1 unique (employee_id, retirement_date);
-
-alter table employee.company_assignment
-  add constraint company_assignment_UK1 unique (employee_id, company_assignment_date);
-
-alter table employee.company_assignment
-  add constraint company_assignment_CK1 check (
-    company_assignment_end_date is null
-    or company_assignment_date <= company_assignment_end_date
-  );
-
-alter table employee.assigned_department
-  add constraint assigned_department_CK1 check (
-    assigned_department_end_date is null
-    or assigned_department_date <= assigned_department_end_date
-  );
-
-alter table employee.assigned_division
-  add constraint assigned_division_CK1 check (
-    assigned_division_end_date is null
-    or assigned_division_date <= assigned_division_end_date
-  );
-
-alter table employee.assigned_team
-  add constraint assigned_team_CK1 check (
-    assigned_team_end_date is null
-    or assigned_team_date <= assigned_team_end_date
-  );
-
-alter table employee.assignment_project
-  add constraint assignment_project_CK1 check (
-    assignment_project_end_date is null
-    or assignment_project_date <= assignment_project_end_date
-  );
-
-alter table employee.assumption_of_position
-  add constraint assumption_of_position_CK1 check (
-    assumption_of_position_end_date is null
-    or assumption_of_position_date <= assumption_of_position_end_date
-  );
-
--- quarter は業務定義上 1〜4 のみ許可。
-alter table employee.evaluation
-  add constraint evaluation_CK1 check (quarter between 1 and 4);
-
--- 評価点は業務定義上 1〜10 のみ許可。
-alter table employee.evaluation
-  add constraint evaluation_CK2 check (evaluation between 1 and 10);
-
--- 等級は1以上を前提とし、0以下の不正データを防止。
-alter table employee.employee
-  add constraint employee_CK1 check (grade >= 1);
-
--- スキルレベルは全カテゴリで 1〜10 の共通尺度を強制する。
-alter table employee.employee_database_skill
-  add constraint employee_database_skill_CK1 check (skill_level between 1 and 10);
-
-alter table employee.employee_framework_skill
-  add constraint employee_framework_skill_CK1 check (skill_level between 1 and 10);
-
-alter table employee.employee_infrastructure_skill
-  add constraint employee_infrastructure_skill_CK1 check (skill_level between 1 and 10);
-
-alter table employee.employee_programming_skill
-  add constraint employee_programming_skill_CK1 check (skill_level between 1 and 10);
 
 -- 期間検索の性能劣化を防ぐための業務インデックス。
 create index company_assignment_IDX1
