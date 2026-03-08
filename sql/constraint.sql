@@ -152,10 +152,7 @@ alter table reinstatement
   add constraint reinstatement_FK1 foreign key (employee_id) references employee(employee_id);
 
 alter table retired_employee
-  add constraint retired_employee_FK1 foreign key (retired_employee_id) references employee(employee_id);
-
-alter table retired_employee
-  add constraint retired_employee_FK2 foreign key (employee_id) references employee(employee_id);
+  add constraint retired_employee_FK1 foreign key (employee_id) references employee(employee_id);
 
 alter table retired_employee_contact_information
   add constraint retired_employee_contact_information_FK1 foreign key (employee_contact_information_id) references employee_contact_information(employee_contact_information_id);

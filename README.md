@@ -12,10 +12,84 @@ https://github.com/tonbiattack/employee-management
   - Spring プロジェクト `src/main/resources/*.sql` のSQL
   - `schema.sql` / `data.sql` / テーブル別SQL
 
-## ER図
-![image](https://user-images.githubusercontent.com/40497724/226085559-26d1df07-9c2b-4735-b808-91990bfb574f.png)
+## データ投入の流れ（ER図の代替）
 
-- データベース設計は実務の中で積めていなかった経験であり、後工程での手戻りが非常に大きくなる工程なので[WEB+DB PRESS Vol.130](https://amzn.asia/d/d9WZIUN)のイミュータブルデータモデル と[楽々ERDレッスン](https://amzn.asia/d/1hdFDWd)を参考にして何度も修正を重ねながら作成しました。
+このプロジェクトは、`docker/*-init/01-schema.sql` でテーブルを作成し、
+`docker/*-init/02-data.sql` でデータを投入します。  
+投入は、外部キーで参照される側から順に入るようにしています。
+
+1. マスタ系（参照される土台）
+- `employee_status`, `gender`, `position`, `role`
+- `database_skill`, `framework_skill`, `infrastructure_skill`, `programming_skill`
+- `business_partner`, `company`, `department`, `division`, `team`, `project`
+
+2. 社員の基本情報
+- `employee`
+- `employee_address`
+- `employee_contact_information`
+
+3. 認証・連絡先の業務利用情報
+- `active_employee_contact_information`
+- `password`
+- `ownership`
+
+4. 所属・配属の現在値
+- `belonging_company`, `belonging_department`, `belonging_division`, `belonging_team`, `belonging_project`
+- `current_position`
+
+5. スキル情報
+- `employee_database_skill`
+- `employee_framework_skill`
+- `employee_infrastructure_skill`
+- `employee_programming_skill`
+
+6. イベント・履歴系
+- `joining_the_company`, `company_assignment`
+- `assumption_of_position`
+- `assignment_project`, `assigned_department`, `assigned_division`, `assigned_team`
+- `leave_of_absence`, `reinstatement`, `retirement`, `retired_employee`
+- `contact_information_for_staff_on_leave`, `retired_employee_contact_information`
+- `evaluation`, `employee_project_record`, `project_completion_report`
+
+ポイント:
+- 「現在値テーブル」と「履歴/イベントテーブル」は役割を分けて運用します。
+- ER図を固定で維持する代わりに、投入順と状態遷移（どのイベントでどのテーブルが更新されるか）を基準に読むと、実装とズレにくくなります。
+
+## 既知の設計課題（正直ベース）
+
+このリポジトリは学習・検証用途として改善を続けています。現時点での課題を明記します。
+
+### 1. 配属イベントのみで「離職/解除イベント」が不足している
+
+現状は `company_assignment`（配属）中心で、会社から抜けるイベントが明示されていません。  
+このため「いつ所属が終わったか」を次イベントから推測する場面が発生します。
+
+問題になりやすいケース:
+- 次の配属まで未所属期間がある
+- 配属解除だけ先に起きる
+- 同じ会社に再配属される
+- 未来日のデータを先に登録する
+
+### 2. 現在値 + イベント履歴を分けるなら、解除側も必要
+
+「現在値テーブル」と「イベント履歴テーブル」を分ける設計にする場合、  
+`配属` だけでなく `離職/解除` イベントも持つ方が自然です。
+
+例（イベント方式）:
+- `company_assignment`（配属）
+- `company_unassignment`（離職/解除）
+
+### 3. 実務では期間方式の方が扱いやすいことが多い
+
+配属/解除を別イベントで管理する方法も可能ですが、  
+「いつからいつまで所属していたか」を主目的にするなら、期間方式がシンプルです。
+
+例（期間方式）:
+- `employee_company_history(employee_id, company_id, start_date, end_date)`
+
+補足:
+- 配属通知・解除通知・承認履歴・操作主体（誰が実行したか）を重視する場合はイベント方式が有効です。
+- 所属期間の正確な再現と検索容易性を重視する場合は期間方式を優先する方針が現実的です。
 
 ## 実装処理一覧
 - 実装済みの業務処理・バッチコマンド一覧: [docs/implemented-processing-list.md](docs/implemented-processing-list.md)
