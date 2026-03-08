@@ -161,6 +161,10 @@ func (u *EmployeeStatusTransitionUsecase) TransitionActiveToRetired(ctx context.
 		}
 
 		// 退職遷移後は所属組織（会社/部署/課/チーム等）から外す。
+		// 期間管理のため、未クローズの配属/就任履歴に end_date を設定してから所属を解除する。
+		if err := closeOpenPeriodRecordsOnUnassignment(tx, in.EmployeeID, in.RetirementDate); err != nil {
+			return err
+		}
 		if err := clearOrganizationBelongings(tx, in.EmployeeID); err != nil {
 			return err
 		}
@@ -264,6 +268,10 @@ func (u *EmployeeStatusTransitionUsecase) TransitionActiveToLeave(ctx context.Co
 		}
 
 		// 休職遷移後は所属組織（会社/部署/課/チーム等）から外す。
+		// 期間管理のため、未クローズの配属/就任履歴に end_date を設定してから所属を解除する。
+		if err := closeOpenPeriodRecordsOnUnassignment(tx, in.EmployeeID, in.LeaveDate); err != nil {
+			return err
+		}
 		if err := clearOrganizationBelongings(tx, in.EmployeeID); err != nil {
 			return err
 		}
@@ -364,8 +372,8 @@ func (u *EmployeeStatusTransitionUsecase) TransitionRetiredToActive(ctx context.
 				return fmt.Errorf("restore belonging company: %w", err)
 			}
 			if err := tx.Exec(
-				`INSERT INTO employee.company_assignment (company_id, employee_id, company_assignment_date)
-				 SELECT ?, ?, ?
+				`INSERT INTO employee.company_assignment (company_id, employee_id, company_assignment_date, company_assignment_end_date)
+				 SELECT ?, ?, ?, NULL
 				 WHERE NOT EXISTS (
 				     SELECT 1
 				       FROM employee.company_assignment
@@ -453,8 +461,8 @@ func (u *EmployeeStatusTransitionUsecase) AssignEmployeeToProject(ctx context.Co
 			return fmt.Errorf("employee is already assigned to project: employee_id=%d", in.EmployeeID)
 		}
 		if err := tx.Exec(
-			`INSERT INTO employee.assignment_project (assignment_project_date, project_id, employee_id)
-			 SELECT ?, ?, ?
+			`INSERT INTO employee.assignment_project (assignment_project_date, assignment_project_end_date, project_id, employee_id)
+			 SELECT ?, NULL, ?, ?
 			 WHERE NOT EXISTS (
 			     SELECT 1
 			       FROM employee.assignment_project
@@ -495,6 +503,9 @@ func (u *EmployeeStatusTransitionUsecase) ChangeCurrentPosition(ctx context.Cont
 		if err := tx.Exec(`DELETE FROM employee.current_position WHERE employee_id = ?`, in.EmployeeID).Error; err != nil {
 			return fmt.Errorf("delete current position: %w", err)
 		}
+		if err := closeOpenAssumptionOfPositionPeriods(tx, in.EmployeeID, in.AssumptionDate); err != nil {
+			return err
+		}
 		if err := tx.Exec(
 			`INSERT INTO employee.current_position (position_id, employee_id)
 			 VALUES (?, ?)`,
@@ -503,8 +514,13 @@ func (u *EmployeeStatusTransitionUsecase) ChangeCurrentPosition(ctx context.Cont
 			return fmt.Errorf("insert current position: %w", err)
 		}
 		if err := tx.Exec(
-			`INSERT INTO employee.assumption_of_position (position_id, employee_id, assumption_of_position_date)
-			 SELECT ?, ?, ?
+			`INSERT INTO employee.assumption_of_position (
+			     position_id,
+			     employee_id,
+			     assumption_of_position_date,
+			     assumption_of_position_end_date
+			 )
+			 SELECT ?, ?, ?, NULL
 			 WHERE NOT EXISTS (
 			     SELECT 1
 			       FROM employee.assumption_of_position
@@ -641,6 +657,82 @@ func clearOrganizationBelongings(tx *gorm.DB, employeeID int) error {
 		if err := tx.Exec(query, employeeID).Error; err != nil {
 			return fmt.Errorf("clear organization belongings: %w", err)
 		}
+	}
+	return nil
+}
+
+// closeOpenPeriodRecordsOnUnassignment は、離任時に未終了の期間系履歴へ end_date を付与する。
+// 休職/退職で現所属を解除する前に履歴をクローズし、監査可能な期間データを残す。
+func closeOpenPeriodRecordsOnUnassignment(tx *gorm.DB, employeeID int, endDate string) error {
+	updateQueries := []struct {
+		query    string
+		errorMsg string
+	}{
+		{
+			query: `UPDATE employee.company_assignment
+			           SET company_assignment_end_date = ?
+			         WHERE employee_id = ?
+			           AND company_assignment_end_date IS NULL
+			           AND company_assignment_date <= ?`,
+			errorMsg: "close company assignment period",
+		},
+		{
+			query: `UPDATE employee.assignment_project
+			           SET assignment_project_end_date = ?
+			         WHERE employee_id = ?
+			           AND assignment_project_end_date IS NULL
+			           AND assignment_project_date <= ?`,
+			errorMsg: "close assignment project period",
+		},
+		{
+			query: `UPDATE employee.assigned_department
+			           SET assigned_department_end_date = ?
+			         WHERE employee_id = ?
+			           AND assigned_department_end_date IS NULL
+			           AND assigned_department_date <= ?`,
+			errorMsg: "close assigned department period",
+		},
+		{
+			query: `UPDATE employee.assigned_division
+			           SET assigned_division_end_date = ?
+			         WHERE employee_id = ?
+			           AND assigned_division_end_date IS NULL
+			           AND assigned_division_date <= ?`,
+			errorMsg: "close assigned division period",
+		},
+		{
+			query: `UPDATE employee.assigned_team
+			           SET assigned_team_end_date = ?
+			         WHERE employee_id = ?
+			           AND assigned_team_end_date IS NULL
+			           AND assigned_team_date <= ?`,
+			errorMsg: "close assigned team period",
+		},
+	}
+
+	for _, q := range updateQueries {
+		if err := tx.Exec(q.query, endDate, employeeID, endDate).Error; err != nil {
+			return fmt.Errorf("%s: %w", q.errorMsg, err)
+		}
+	}
+
+	if err := closeOpenAssumptionOfPositionPeriods(tx, employeeID, endDate); err != nil {
+		return err
+	}
+	return nil
+}
+
+// closeOpenAssumptionOfPositionPeriods は、役職就任履歴の未終了レコードに終了日を付与する。
+func closeOpenAssumptionOfPositionPeriods(tx *gorm.DB, employeeID int, endDate string) error {
+	if err := tx.Exec(
+		`UPDATE employee.assumption_of_position
+		    SET assumption_of_position_end_date = ?
+		  WHERE employee_id = ?
+		    AND assumption_of_position_end_date IS NULL
+		    AND assumption_of_position_date <= ?`,
+		endDate, employeeID, endDate,
+	).Error; err != nil {
+		return fmt.Errorf("close assumption of position period: %w", err)
 	}
 	return nil
 }

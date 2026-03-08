@@ -75,7 +75,12 @@ create table assigned_department (
   , employee_id integer not null
   , department_id integer not null
   , assigned_department_date date not null
+  , assigned_department_end_date date
   , constraint assigned_department_PKC primary key (assigned_department_id)
+  , constraint assigned_department_CK1 check (
+      assigned_department_end_date is null
+      or assigned_department_date <= assigned_department_end_date
+    )
 ) ;
 
 -- 配属課
@@ -86,7 +91,12 @@ create table assigned_division (
   , division_id integer not null
   , employee_id integer not null
   , assigned_division_date date not null
+  , assigned_division_end_date date
   , constraint assigned_division_PKC primary key (assigned_division_id)
+  , constraint assigned_division_CK1 check (
+      assigned_division_end_date is null
+      or assigned_division_date <= assigned_division_end_date
+    )
 ) ;
 
 -- 配属チーム
@@ -97,7 +107,12 @@ create table assigned_team (
   , employee_id integer not null
   , team_id integer not null
   , assigned_team_date date not null
+  , assigned_team_end_date date
   , constraint assigned_team_PKC primary key (assigned_team_id)
+  , constraint assigned_team_CK1 check (
+      assigned_team_end_date is null
+      or assigned_team_date <= assigned_team_end_date
+    )
 ) ;
 
 -- 配属案件
@@ -106,9 +121,14 @@ drop table if exists assignment_project cascade;
 create table assignment_project (
   assignment_project_id integer default nextval('assignment_project_id_seq') not null
   , assignment_project_date date not null
+  , assignment_project_end_date date
   , project_id integer not null
   , employee_id integer not null
   , constraint assignment_project_PKC primary key (assignment_project_id)
+  , constraint assignment_project_CK1 check (
+      assignment_project_end_date is null
+      or assignment_project_date <= assignment_project_end_date
+    )
 ) ;
 
 -- 役職就任
@@ -119,7 +139,12 @@ create table assumption_of_position (
   , position_id integer not null
   , employee_id integer not null
   , assumption_of_position_date date not null
+  , assumption_of_position_end_date date
   , constraint assumption_of_position_PKC primary key (assumption_of_position_id)
+  , constraint assumption_of_position_CK1 check (
+      assumption_of_position_end_date is null
+      or assumption_of_position_date <= assumption_of_position_end_date
+    )
 ) ;
 
 -- 所属会社
@@ -180,7 +205,12 @@ create table company_assignment (
   , company_id integer not null
   , employee_id integer not null
   , company_assignment_date date not null
+  , company_assignment_end_date date
   , constraint company_assignment_PKC primary key (company_assignment_id)
+  , constraint company_assignment_CK1 check (
+      company_assignment_end_date is null
+      or company_assignment_date <= company_assignment_end_date
+    )
 ) ;
 
 -- 休職社員連絡先
@@ -717,22 +747,26 @@ comment on column assigned_department.assigned_department_id is '配属部署ID'
 comment on column assigned_department.employee_id is '社員ID';
 comment on column assigned_department.department_id is '部署ID';
 comment on column assigned_department.assigned_department_date is '部署配属日時';
+comment on column assigned_department.assigned_department_end_date is '部署配属終了日（NULLは配属継続中）';
 
 comment on table assigned_division is '配属課';
 comment on column assigned_division.assigned_division_id is '配属課ID';
 comment on column assigned_division.division_id is '課ID';
 comment on column assigned_division.employee_id is '社員ID';
 comment on column assigned_division.assigned_division_date is '課配属日時';
+comment on column assigned_division.assigned_division_end_date is '課配属終了日（NULLは配属継続中）';
 
 comment on table assigned_team is '配属チーム';
 comment on column assigned_team.assigned_team_id is '配属課ID';
 comment on column assigned_team.employee_id is '社員ID';
 comment on column assigned_team.team_id is 'チームID';
 comment on column assigned_team.assigned_team_date is 'チーム配属日時';
+comment on column assigned_team.assigned_team_end_date is 'チーム配属終了日（NULLは配属継続中）';
 
 comment on table assignment_project is '配属案件';
 comment on column assignment_project.assignment_project_id is '配属案件ID';
 comment on column assignment_project.assignment_project_date is '案件配属日時';
+comment on column assignment_project.assignment_project_end_date is '案件配属終了日（NULLは配属継続中）';
 comment on column assignment_project.project_id is '案件ID';
 comment on column assignment_project.employee_id is '社員ID';
 
@@ -741,6 +775,7 @@ comment on column assumption_of_position.assumption_of_position_id is '役職就
 comment on column assumption_of_position.position_id is '役職ID';
 comment on column assumption_of_position.employee_id is '社員ID';
 comment on column assumption_of_position.assumption_of_position_date is '役職就任日時';
+comment on column assumption_of_position.assumption_of_position_end_date is '役職就任終了日（NULLは就任継続中）';
 
 comment on table belonging_company is '所属会社';
 comment on column belonging_company.belonging_company_id is '所属会社ID';
@@ -772,6 +807,7 @@ comment on column company_assignment.company_assignment_id is '会社配属ID';
 comment on column company_assignment.company_id is '会社ID';
 comment on column company_assignment.employee_id is '社員ID';
 comment on column company_assignment.company_assignment_date is '会社配属日時';
+comment on column company_assignment.company_assignment_end_date is '会社所属終了日（NULLは所属継続中）';
 
 comment on table contact_information_for_staff_on_leave is '休職社員連絡先';
 comment on column contact_information_for_staff_on_leave.contact_information_for_staff_on_leave_id is '休職社員連絡先ID';

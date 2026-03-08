@@ -133,10 +133,10 @@ insert into employee.company(company_code,company_name,company_business_content)
   , (4,4)
   , (5,5)
   , (6,6);
-insert into employee.company_assignment(company_id,employee_id,company_assignment_date) values 
-    (1,1,'1993-06-01')
-  , (2,2,'1992-10-24')
-  , (3,3,'1999-09-02')
-  , (4,4,'1999-09-25')
-  , (5,5,'1995-02-16')
-  , (6,6,'1992-06-01');
+insert into employee.company_assignment(company_id,employee_id,company_assignment_date,company_assignment_end_date) values 
+    (1,1,'1993-06-01',NULL)
+  , (2,2,'1992-10-24',NULL)
+  , (3,3,'1999-09-02',NULL)
+  , (4,4,'1999-09-25',NULL)
+  , (5,5,'1995-02-16',NULL)
+  , (6,6,'1992-06-01',NULL);

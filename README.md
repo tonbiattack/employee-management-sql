@@ -44,7 +44,13 @@ https://github.com/tonbiattack/employee-management
 - `employee_programming_skill`
 
 6. イベント・履歴系
-- `joining_the_company`, `company_assignment`
+- `joining_the_company`
+- `company_assignment`（`company_assignment_date` / `company_assignment_end_date`）
+- `assigned_department`（`assigned_department_date` / `assigned_department_end_date`）
+- `assigned_division`（`assigned_division_date` / `assigned_division_end_date`）
+- `assigned_team`（`assigned_team_date` / `assigned_team_end_date`）
+- `assignment_project`（`assignment_project_date` / `assignment_project_end_date`）
+- `assumption_of_position`（`assumption_of_position_date` / `assumption_of_position_end_date`）
 - `assumption_of_position`
 - `assignment_project`, `assigned_department`, `assigned_division`, `assigned_team`
 - `leave_of_absence`, `reinstatement`, `retirement`, `retired_employee`
@@ -59,10 +65,15 @@ https://github.com/tonbiattack/employee-management
 
 このリポジトリは学習・検証用途として改善を続けています。現時点での課題を明記します。
 
-### 1. 配属イベントのみで「離職/解除イベント」が不足している
+### 1. 会社所属履歴は `end_date NULL` 許容で管理する
 
-現状は `company_assignment`（配属）中心で、会社から抜けるイベントが明示されていません。  
-このため「いつ所属が終わったか」を次イベントから推測する場面が発生します。
+`company_assignment` を含む期間系テーブルに `*_end_date` を追加し、  
+`NULL` は「現在も所属中」を表す運用に変更しました。
+
+背景:
+- 全領域をイミュータブルイベントで統一すると、学習・検証コストが上がりすぎる
+- 一方で「いつ抜けたか」が不明だと監査性が下がる
+- そのため、期間系の `end_date NULL` は必要悪として採用する
 
 問題になりやすいケース:
 - 次の配属まで未所属期間がある
@@ -70,7 +81,7 @@ https://github.com/tonbiattack/employee-management
 - 同じ会社に再配属される
 - 未来日のデータを先に登録する
 
-### 2. 現在値 + イベント履歴を分けるなら、解除側も必要
+### 2. 現在値 + 履歴の併用方針
 
 「現在値テーブル」と「イベント履歴テーブル」を分ける設計にする場合、  
 `配属` だけでなく `離職/解除` イベントも持つ方が自然です。
@@ -79,17 +90,23 @@ https://github.com/tonbiattack/employee-management
 - `company_assignment`（配属）
 - `company_unassignment`（離職/解除）
 
-### 3. 実務では期間方式の方が扱いやすいことが多い
+### 3. このリポジトリの当面方針
 
-配属/解除を別イベントで管理する方法も可能ですが、  
-「いつからいつまで所属していたか」を主目的にするなら、期間方式がシンプルです。
+配属/解除を別イベントで管理する方法も可能ですが、当面は次を採用します。
+
+- 会社/部署/課/チーム/案件/役職の履歴を期間列で管理する
+- `*_end_date IS NULL` を現行所属（継続中）とみなす
+- 休職/退職時に `end_date` を埋めて未クローズ期間を一括クローズする
 
 例（期間方式）:
-- `employee_company_history(employee_id, company_id, start_date, end_date)`
+- `company_assignment(employee_id, company_id, company_assignment_date, company_assignment_end_date NULL)`
+- `assignment_project(employee_id, project_id, assignment_project_date, assignment_project_end_date NULL)`
+- `assumption_of_position(employee_id, position_id, assumption_of_position_date, assumption_of_position_end_date NULL)`
 
 補足:
 - 配属通知・解除通知・承認履歴・操作主体（誰が実行したか）を重視する場合はイベント方式が有効です。
 - 所属期間の正確な再現と検索容易性を重視する場合は期間方式を優先する方針が現実的です。
+- `NULL` を含む検索は複雑化しやすいため、`IS NULL` 条件を共通化した検索SQLを用意して運用します。
 
 ## 実装処理一覧
 - 実装済みの業務処理・バッチコマンド一覧: [docs/implemented-processing-list.md](docs/implemented-processing-list.md)

@@ -267,6 +267,46 @@ alter table retirement
 alter table company_assignment
   add constraint company_assignment_UK1 unique (employee_id, company_assignment_date);
 
+-- 会社所属期間の終了日は、開始日以前にならないようにする。
+-- NULL は「現在も所属中」を表す必要悪として許容する。
+alter table company_assignment
+  add constraint company_assignment_CK1 check (
+    company_assignment_end_date is null
+    or company_assignment_date <= company_assignment_end_date
+  );
+
+-- 配属/就任の期間終了日は、開始日以前にならないようにする。
+-- NULL は「現在も継続中」を表すため許容する。
+alter table assigned_department
+  add constraint assigned_department_CK1 check (
+    assigned_department_end_date is null
+    or assigned_department_date <= assigned_department_end_date
+  );
+
+alter table assigned_division
+  add constraint assigned_division_CK1 check (
+    assigned_division_end_date is null
+    or assigned_division_date <= assigned_division_end_date
+  );
+
+alter table assigned_team
+  add constraint assigned_team_CK1 check (
+    assigned_team_end_date is null
+    or assigned_team_date <= assigned_team_end_date
+  );
+
+alter table assignment_project
+  add constraint assignment_project_CK1 check (
+    assignment_project_end_date is null
+    or assignment_project_date <= assignment_project_end_date
+  );
+
+alter table assumption_of_position
+  add constraint assumption_of_position_CK1 check (
+    assumption_of_position_end_date is null
+    or assumption_of_position_date <= assumption_of_position_end_date
+  );
+
 -- quarter は業務定義上 1〜4 のみ許可。
 alter table evaluation
   add constraint evaluation_CK1 check (quarter between 1 and 4);

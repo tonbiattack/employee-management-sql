@@ -30,7 +30,12 @@ create table assigned_department (
   , employee_id integer not null
   , department_id integer not null
   , assigned_department_date date not null
+  , assigned_department_end_date date null
   , constraint assigned_department_PKC primary key (assigned_department_id)
+  , constraint assigned_department_CK1 check (
+      assigned_department_end_date is null
+      or assigned_department_date <= assigned_department_end_date
+    )
 ) ;
 
 -- 配属課
@@ -41,7 +46,12 @@ create table assigned_division (
   , division_id integer not null
   , employee_id integer not null
   , assigned_division_date date not null
+  , assigned_division_end_date date null
   , constraint assigned_division_PKC primary key (assigned_division_id)
+  , constraint assigned_division_CK1 check (
+      assigned_division_end_date is null
+      or assigned_division_date <= assigned_division_end_date
+    )
 ) ;
 
 -- 配属チーム
@@ -52,7 +62,12 @@ create table assigned_team (
   , employee_id integer not null
   , team_id integer not null
   , assigned_team_date date not null
+  , assigned_team_end_date date null
   , constraint assigned_team_PKC primary key (assigned_team_id)
+  , constraint assigned_team_CK1 check (
+      assigned_team_end_date is null
+      or assigned_team_date <= assigned_team_end_date
+    )
 ) ;
 
 -- 配属案件
@@ -61,9 +76,14 @@ drop table if exists assignment_project;
 create table assignment_project (
   assignment_project_id integer not null auto_increment
   , assignment_project_date date not null
+  , assignment_project_end_date date null
   , project_id integer not null
   , employee_id integer not null
   , constraint assignment_project_PKC primary key (assignment_project_id)
+  , constraint assignment_project_CK1 check (
+      assignment_project_end_date is null
+      or assignment_project_date <= assignment_project_end_date
+    )
 ) ;
 
 -- 役職就任
@@ -74,7 +94,12 @@ create table assumption_of_position (
   , position_id integer not null
   , employee_id integer not null
   , assumption_of_position_date date not null
+  , assumption_of_position_end_date date null
   , constraint assumption_of_position_PKC primary key (assumption_of_position_id)
+  , constraint assumption_of_position_CK1 check (
+      assumption_of_position_end_date is null
+      or assumption_of_position_date <= assumption_of_position_end_date
+    )
 ) ;
 
 -- 所属会社
@@ -135,7 +160,12 @@ create table company_assignment (
   , company_id integer not null
   , employee_id integer not null
   , company_assignment_date date not null
+  , company_assignment_end_date date null
   , constraint company_assignment_PKC primary key (company_assignment_id)
+  , constraint company_assignment_CK1 check (
+      company_assignment_end_date is null
+      or company_assignment_date <= company_assignment_end_date
+    )
 ) ;
 
 -- 休職社員連絡先
