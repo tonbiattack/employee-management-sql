@@ -17,6 +17,9 @@ https://github.com/tonbiattack/employee-management
 
 - データベース設計は実務の中で積めていなかった経験であり、後工程での手戻りが非常に大きくなる工程なので[WEB+DB PRESS Vol.130](https://amzn.asia/d/d9WZIUN)のイミュータブルデータモデル と[楽々ERDレッスン](https://amzn.asia/d/1hdFDWd)を参考にして何度も修正を重ねながら作成しました。
 
+## 実装処理一覧
+- 実装済みの業務処理・バッチコマンド一覧: [docs/implemented-processing-list.md](docs/implemented-processing-list.md)
+
 ## すぐ動かす
 
 ### Docker Compose で起動して投入する

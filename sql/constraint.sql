@@ -169,5 +169,130 @@ alter table role
 alter table team
   add constraint team_FK1 foreign key (division_id) references division(division_id);
 
+-- ========================================
+-- 追加: UNIQUE / CHECK 制約
+-- ========================================
+-- このセクションの目的:
+--   1) データ重複をDBレベルで防止する（UNIQUE）
+--   2) 不正値の登録をDBレベルで防止する（CHECK）
+--   3) アプリ側の実装ミスがあっても整合性を崩さない最終防衛線にする
+
+-- 社員コードは社員を一意に識別する業務キーのため重複不可。
+alter table employee
+  add constraint employee_UK1 unique (employee_code);
+
+-- 会社コードはマスタ連携・画面表示で利用される識別子のため重複不可。
+alter table company
+  add constraint company_UK1 unique (company_code);
+
+-- 取引先コードは外部連携・参照で利用される識別子のため重複不可。
+alter table business_partner
+  add constraint business_partner_UK1 unique (business_partner_code);
+
+-- 部署コードは「会社内」で一意に管理する想定のため複合一意にする。
+alter table department
+  add constraint department_UK1 unique (company_id, department_code);
+
+-- 課コードは「部署内」で一意に管理する想定のため複合一意にする。
+alter table division
+  add constraint division_UK1 unique (department_id, division_code);
+
+-- チームコードは「課内」で一意に管理する想定のため複合一意にする。
+alter table team
+  add constraint team_UK1 unique (division_id, team_code);
+
+-- ロール名は権限の識別子であり同名ロール重複を防ぐ。
+alter table role
+  add constraint role_UK1 unique (role_name);
+
+-- 役職コードは役職マスタの識別子であり重複不可。
+alter table position
+  add constraint position_UK1 unique (position_code);
+
+-- スキルマスタ名は同義重複を防ぎ検索・集計の一貫性を保つため一意にする。
+alter table database_skill
+  add constraint database_skill_UK1 unique (database_skill_name);
+
+alter table framework_skill
+  add constraint framework_skill_UK1 unique (framework_skill_name);
+
+alter table infrastructure_skill
+  add constraint infrastructure_skill_UK1 unique (infrastructure_skill_name);
+
+alter table programming_skill
+  add constraint programming_skill_UK1 unique (programming_skill_name);
+
+-- 現在所属は社員ごとに1件を想定するため employee_id を一意にする。
+-- （履歴は company_assignment など履歴テーブル側で管理する）
+alter table belonging_company
+  add constraint belonging_company_UK1 unique (employee_id);
+
+alter table belonging_department
+  add constraint belonging_department_UK1 unique (employee_id);
+
+alter table belonging_division
+  add constraint belonging_division_UK1 unique (employee_id);
+
+alter table belonging_team
+  add constraint belonging_team_UK1 unique (employee_id);
+
+alter table belonging_project
+  add constraint belonging_project_UK1 unique (employee_id);
+
+-- 連絡先ロールテーブルは同一連絡先の重複登録を防ぐ。
+-- （現役/休職/退職のどこに属するかは状態遷移ロジックで制御）
+alter table active_employee_contact_information
+  add constraint active_employee_contact_information_UK1 unique (employee_contact_information_id);
+
+alter table contact_information_for_staff_on_leave
+  add constraint contact_information_for_staff_on_leave_UK1 unique (employee_contact_information_id);
+
+alter table retired_employee_contact_information
+  add constraint retired_employee_contact_information_UK1 unique (employee_contact_information_id);
+
+-- 同一社員・同一期間の評価重複を防止する。
+alter table evaluation
+  add constraint evaluation_UK1 unique (employee_id, year, quarter);
+
+-- 入社/休職/復職/退職/配属履歴は同日重複イベントを防止する。
+alter table joining_the_company
+  add constraint joining_the_company_UK1 unique (employee_id, joining_the_company_date);
+
+alter table leave_of_absence
+  add constraint leave_of_absence_UK1 unique (employee_id, leave_of_absence_date);
+
+alter table reinstatement
+  add constraint reinstatement_UK1 unique (employee_id, reinstatement_date);
+
+alter table retirement
+  add constraint retirement_UK1 unique (employee_id, retirement_date);
+
+alter table company_assignment
+  add constraint company_assignment_UK1 unique (employee_id, company_assignment_date);
+
+-- quarter は業務定義上 1〜4 のみ許可。
+alter table evaluation
+  add constraint evaluation_CK1 check (quarter between 1 and 4);
+
+-- 評価点は業務定義上 1〜10 のみ許可。
+alter table evaluation
+  add constraint evaluation_CK2 check (evaluation between 1 and 10);
+
+-- 等級は1以上を前提とし、0以下の不正データを防止。
+alter table employee
+  add constraint employee_CK1 check (grade >= 1);
+
+-- スキルレベルは全カテゴリで 1〜10 の共通尺度を強制する。
+alter table employee_database_skill
+  add constraint employee_database_skill_CK1 check (skill_level between 1 and 10);
+
+alter table employee_framework_skill
+  add constraint employee_framework_skill_CK1 check (skill_level between 1 and 10);
+
+alter table employee_infrastructure_skill
+  add constraint employee_infrastructure_skill_CK1 check (skill_level between 1 and 10);
+
+alter table employee_programming_skill
+  add constraint employee_programming_skill_CK1 check (skill_level between 1 and 10);
 
 
