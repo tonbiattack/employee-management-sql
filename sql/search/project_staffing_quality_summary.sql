@@ -5,8 +5,19 @@
   想定ユースケース:
     - PM向けの案件健全性モニタリング
     - 人員計画（案件の人材強度確認）
+
+  主要な出力項目:
+    - project_id / project_code / project_content
+    - business_partner_name
+    - assigned_member_count / high_skill_member_count / avg_latest_evaluation
+
+  実装方針:
+    - `latest_evaluation` で社員ごとの最新評価だけを抽出する。
+    - `employee_is_high_skill` でカテゴリ横断のハイスキル判定を事前集約する。
+    - 案件単位の最終集計では `COUNT(DISTINCT ...)` を使って重複計上を防ぐ。
 */
 WITH latest_evaluation AS (
+  -- 社員ごとに最新の評価レコードを1件に絞る。
   SELECT
     e.employee_id,
     e.evaluation,
@@ -17,6 +28,7 @@ WITH latest_evaluation AS (
   FROM employee.evaluation AS e
 ),
 employee_is_high_skill AS (
+  -- 4カテゴリのうち1つでも skill_level >= 8 があればハイスキルとみなす。
   SELECT
     s.employee_id,
     MAX(CASE WHEN s.skill_level >= 8 THEN 1 ELSE 0 END) AS is_high_skill
@@ -49,6 +61,7 @@ LEFT JOIN employee_is_high_skill AS hs
 LEFT JOIN latest_evaluation AS le
   ON le.employee_id = ap.employee_id
  AND le.rn = 1
+-- 案件ごとの一覧として project_id 順で返す。
 GROUP BY
   p.project_id,
   p.project_code,

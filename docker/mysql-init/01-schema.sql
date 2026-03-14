@@ -110,6 +110,7 @@ create table belonging_company (
   belonging_company_id integer not null auto_increment
   , company_id integer not null
   , employee_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint belonging_company_PKC primary key (belonging_company_id)
 ) ;
 
@@ -120,6 +121,7 @@ create table belonging_department (
   belonging_department_id integer not null auto_increment
   , department_id integer not null
   , employee_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint belonging_department_PKC primary key (belonging_department_id)
 ) ;
 
@@ -130,6 +132,7 @@ create table belonging_division (
   belonging_division_id integer not null auto_increment
   , division_id integer not null
   , employee_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint belonging_division_PKC primary key (belonging_division_id)
 ) ;
 
@@ -140,6 +143,7 @@ create table belonging_project (
   belonging_project_id integer not null auto_increment
   , project_id integer not null
   , employee_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint belonging_project_PKC primary key (belonging_project_id)
 ) ;
 
@@ -150,6 +154,7 @@ create table belonging_team (
   belonging_team_id integer not null auto_increment
   , employee_id integer not null
   , team_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint belonging_team_PKC primary key (belonging_team_id)
 ) ;
 
@@ -162,7 +167,11 @@ create table company_assignment (
   , employee_id integer not null
   , company_assignment_date date not null
   , company_assignment_end_date date null
+  , open_company_assignment_flag tinyint generated always as (
+      case when company_assignment_end_date is null then 1 else null end
+    ) stored
   , constraint company_assignment_PKC primary key (company_assignment_id)
+  , constraint company_assignment_UK2 unique (employee_id, open_company_assignment_flag)
   , constraint company_assignment_CK1 check (
       company_assignment_end_date is null
       or company_assignment_date <= company_assignment_end_date
@@ -186,6 +195,7 @@ create table current_position (
   current_position_id integer not null auto_increment
   , position_id integer not null
   , employee_id integer not null
+  , updated_at timestamp not null default current_timestamp
   , constraint current_position_PKC primary key (current_position_id)
 ) ;
 
@@ -250,8 +260,11 @@ drop table if exists employee_project_record;
 create table employee_project_record (
   employee_project_record_id integer not null auto_increment
   , project_leaving_date date not null
+  , record_type varchar(30) not null default 'RETROSPECTIVE'
   , evaluation_point text not null
   , reflection_point text not null
+  , recorded_by_employee_id integer null
+  , recorded_at timestamp not null default current_timestamp
   , project_id integer not null
   , employee_id integer not null
   , constraint employee_project_record_PKC primary key (employee_project_record_id)
@@ -264,6 +277,7 @@ create table evaluation (
   evaluation_id integer not null auto_increment
   , `year` integer not null
   , `quarter` integer not null
+  , evaluation_year_type varchar(20) not null default 'FISCAL'
   , `comment` text not null
   , evaluation integer not null
   , employee_id integer not null
@@ -656,6 +670,9 @@ alter table employee_project_record
 
 alter table employee_project_record
   add constraint employee_project_record_FK2 foreign key (employee_id) references employee(employee_id);
+
+alter table employee_project_record
+  add constraint employee_project_record_FK3 foreign key (recorded_by_employee_id) references employee(employee_id);
 
 alter table evaluation
   add constraint evaluation_FK1 foreign key (employee_id) references employee(employee_id);

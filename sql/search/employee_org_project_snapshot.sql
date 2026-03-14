@@ -5,6 +5,16 @@
   想定ユースケース:
     - 組織図/稼働状況ダッシュボード
     - 1on1や評価面談前の現況確認
+
+  主要な出力項目:
+    - 社員ID / 社員コード / 社員名
+    - 現在所属している会社 / 部署 / 課 / チーム
+    - 現役職名 / 参画案件数
+
+  実装方針:
+    - 現在値テーブル群を LEFT JOIN して、未所属があっても社員行を残す。
+    - 現役社員のみを `employee_status_id = 1` で対象化する。
+    - 案件数は重複を避けるため `COUNT(DISTINCT bp.project_id)` で集計する。
 */
 SELECT
   e.employee_id,
@@ -39,6 +49,7 @@ LEFT JOIN employee.current_position AS cp
   ON cp.employee_id = e.employee_id
 LEFT JOIN employee.position AS p
   ON p.position_id = cp.position_id
+-- 現在所属案件は複数あり得るため、最後に件数集計する。
 LEFT JOIN employee.belonging_project AS bp
   ON bp.employee_id = e.employee_id
 WHERE es.employee_status_id = 1

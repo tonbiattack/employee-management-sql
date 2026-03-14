@@ -117,6 +117,26 @@ https://github.com/tonbiattack/employee-management
 ## 実装処理一覧
 - 実装済みの業務処理・バッチコマンド一覧: [doc/implemented-processing-list.md](doc/implemented-processing-list.md)
 
+## ドキュメント運用
+
+- `docs/`
+  - 設計レビュー、運用ルール、SQLカタログ、方針文書を置く
+- `doc/`
+  - 実装済み処理一覧のような、アプリ実装に密着した補助資料を置く
+
+当面はこのルールで運用し、設計・レビュー系の新規文書は `docs/` に追加する。
+
+## SQL配置ルール
+
+- `sql/search/`
+  - 現行運用で利用する検索SQL、分析SQL、監査SQLを置く
+- `sql/search/legacy/`
+  - 現行スキーマではそのまま使えない旧仕様SQL、参考用SQLを置く
+
+補足:
+- `legacy` 配下のSQLは、参考メモとして残すものであり、現行実装の正常系SQLとは分けて扱う
+- 一覧性を高めるため、用途別の索引は [docs/sql-catalog.md](docs/sql-catalog.md) を参照する
+
 ## すぐ動かす
 
 ### Docker Compose で起動して投入する
@@ -210,6 +230,12 @@ docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/high_sk
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_missing_skill_category.sql
 ```
 
+社員ごとの四半期評価推移（前回差分 / 最新判定つき）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_evaluation_trend.sql
+```
+
 ## ビジネスアプリ向けSQL（横断系）
 
 先に不足データを補完（初回のみ）:
@@ -240,6 +266,108 @@ docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employe
 
 ```bash
 docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/team_capacity_risk_summary.sql
+```
+
+所属履歴（会社 / 部署 / 課 / チーム / 役職の時系列）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/organization_assignment_history.sql
+```
+
+現役社員のベンチ検出（案件未所属 / チーム未所属）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/bench_active_employees.sql
+```
+
+完了案件の振り返り要約（完了日 / 参画人数 / 実績件数）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_completion_retrospective_summary.sql
+```
+
+認証監査（現役なのにログイン不可 / 休職・退職なのにログイン可）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/account_access_audit.sql
+```
+
+現在値と履歴の整合性監査（所属・役職のズレ検出）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/organization_state_consistency_audit.sql
+```
+
+再配置優先度一覧（未配置社員を評価・スキル込みで優先度付け）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/employee_redeployment_priority.sql
+```
+
+完了案件フォローアップ監査（所属残り・離任記録不足）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_closure_followup_audit.sql
+```
+
+休職・退職者フォローアップ一覧（残存権限・所属・再雇用確認）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/inactive_employee_followup_queue.sql
+```
+
+評価登録漏れ監査（最新年度の未登録四半期を抽出）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/evaluation_coverage_audit.sql
+```
+
+案件スキル充足ギャップ（ハイスキル充足率とカテゴリ偏り）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_skill_coverage_gap.sql
+```
+
+再雇用候補プール（評価・スキルベースの優先度付き一覧）:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/rehire_candidate_pool.sql
+```
+
+重複する継続中履歴の監査:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/duplicate_open_history_audit.sql
+```
+
+組織解体時の影響要約:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/org_dismantle_impact_summary.sql
+```
+
+役職停滞アラート:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/position_stagnation_alert.sql
+```
+
+復職後フォローアップ要約:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/leave_return_followup_summary.sql
+```
+
+案件配属タイムライン:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/project_assignment_timeline.sql
+```
+
+スキル成長シグナルのスナップショット:
+
+```bash
+docker compose exec mysql mysql -u root -pmysql -D employee < sql/search/skill_growth_snapshot.sql
 ```
 
 ## Cobraバッチ（社員ステータス遷移）

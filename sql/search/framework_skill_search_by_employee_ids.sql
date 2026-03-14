@@ -1,33 +1,45 @@
--- ========================================
--- SQLファイル: framework_skill_search_by_employee_ids.sql
--- 目的:
---   社員IDリストを入力として、対象社員のフレームワークスキル詳細を取得する。
--- 出力:
---   framework_skill_id / framework_skill_name / skill_level
--- 補足:
---   現状は (61,91) 固定値。実運用では IN 句をバインド変数化すること。
--- ========================================
+/*
+  目的:
+    指定した社員ID一覧に紐づくフレームワークスキル詳細を取得する。
 
-  SELECT
-     framework_skill.framework_skill_id
-    ,framework_skill.framework_skill_name
-    ,emp_framework.skill_level
-  FROM
-    employee_framework_skill as emp_framework
-  INNER JOIN
-    framework_skill as framework_skill on 
-    framework_skill.framework_skill_id = emp_framework.framework_skill_id
-  INNER JOIN 
-    employee as emp on
-    emp.employee_id = emp_framework.employee_id
-  INNER JOIN
-    employee_status as es on
-    es.employee_status_id = emp.employee_status_id 
-  AND
-    es.employee_status_id = 1
-  WHERE 
-    emp.employee_id in
-    (61,91)
-  ORDER BY
-    emp.employee_id
+  想定ユースケース:
+    - 社員一覧の検索結果に対するスキル明細補完
+    - 経歴書出力時の一括スキル取得
+
+  入力:
+    - 社員ID一覧
+
+  出力:
+    - framework_skill_id
+    - framework_skill_name
+    - skill_level
+
+  実装方針:
+    - スキル明細テーブルからマスタを JOIN して名称を解決する。
+    - 現役社員のみに限定して、退職・休職者の明細を除外する。
+
+  注意点:
+    - 現状は `(61,91)` 固定値のため、実運用では動的IN句へ置き換える。
+*/
+SELECT
+  framework_skill.framework_skill_id,
+  framework_skill.framework_skill_name,
+  emp_framework.skill_level
+FROM
+  employee_framework_skill AS emp_framework
+INNER JOIN
+  framework_skill AS framework_skill ON
+  framework_skill.framework_skill_id = emp_framework.framework_skill_id
+INNER JOIN
+  employee AS emp ON
+  emp.employee_id = emp_framework.employee_id
+INNER JOIN
+  employee_status AS es ON
+  es.employee_status_id = emp.employee_status_id
+  AND es.employee_status_id = 1
+WHERE
+  emp.employee_id IN
+  (61,91)
+ORDER BY
+  emp.employee_id;
 

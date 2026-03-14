@@ -5,8 +5,19 @@
   想定ユースケース:
     - チーム編成見直し
     - リーダーの育成/配置計画
+
+  主要な出力項目:
+    - team_id / team_code / team_name
+    - team_member_count / high_skill_member_count / high_skill_ratio
+    - avg_latest_evaluation
+
+  実装方針:
+    - 社員ごとの最新評価をまず CTE で1件化する。
+    - スキル横断のハイスキル判定も別CTEで事前集約する。
+    - 最終的にチーム単位で人数、比率、平均評価をまとめる。
 */
 WITH latest_evaluation AS (
+  -- 社員ごとの直近評価だけを残す。
   SELECT
     e.employee_id,
     e.evaluation,
@@ -17,6 +28,7 @@ WITH latest_evaluation AS (
   FROM employee.evaluation AS e
 ),
 employee_high_skill AS (
+  -- どのカテゴリでも skill_level >= 8 があればハイスキル扱いにする。
   SELECT
     x.employee_id,
     MAX(CASE WHEN x.skill_level >= 8 THEN 1 ELSE 0 END) AS is_high_skill
@@ -50,5 +62,6 @@ LEFT JOIN employee_high_skill AS hs
 LEFT JOIN latest_evaluation AS le
   ON le.employee_id = bt.employee_id
  AND le.rn = 1
+-- リスクの高そうな順に見たいので、比率昇順・平均評価昇順を優先する。
 GROUP BY t.team_id, t.team_code, t.team_name
 ORDER BY high_skill_ratio ASC, avg_latest_evaluation ASC, team_member_count DESC, t.team_id;

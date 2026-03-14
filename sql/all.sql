@@ -154,6 +154,7 @@ create table belonging_company (
   belonging_company_id integer default nextval('belonging_company_id_seq') not null
   , company_id integer not null
   , employee_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint belonging_company_PKC primary key (belonging_company_id)
   , constraint belonging_company_UK1 unique (employee_id)
 ) ;
@@ -165,6 +166,7 @@ create table belonging_department (
   belonging_department_id integer default nextval('belonging_department_id_seq') not null
   , department_id integer not null
   , employee_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint belonging_department_PKC primary key (belonging_department_id)
   , constraint belonging_department_UK1 unique (employee_id)
 ) ;
@@ -176,6 +178,7 @@ create table belonging_division (
   belonging_division_id integer default nextval('belonging_division_id_seq') not null
   , division_id integer not null
   , employee_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint belonging_division_PKC primary key (belonging_division_id)
   , constraint belonging_division_UK1 unique (employee_id)
 ) ;
@@ -187,6 +190,7 @@ create table belonging_project (
   belonging_project_id integer default nextval('belonging_project_id_seq') not null
   , project_id integer not null
   , employee_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint belonging_project_PKC primary key (belonging_project_id)
   , constraint belonging_project_UK1 unique (employee_id)
 ) ;
@@ -198,6 +202,7 @@ create table belonging_team (
   belonging_team_id integer default nextval('belonging_team_id_seq') not null
   , employee_id integer not null
   , team_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint belonging_team_PKC primary key (belonging_team_id)
   , constraint belonging_team_UK1 unique (employee_id)
 ) ;
@@ -211,8 +216,12 @@ create table company_assignment (
   , employee_id integer not null
   , company_assignment_date date not null
   , company_assignment_end_date date
+  , open_company_assignment_flag integer generated always as (
+      case when company_assignment_end_date is null then 1 else null end
+    ) stored
   , constraint company_assignment_PKC primary key (company_assignment_id)
   , constraint company_assignment_UK1 unique (employee_id, company_assignment_date)
+  , constraint company_assignment_UK2 unique (employee_id, open_company_assignment_flag)
   , constraint company_assignment_CK1 check (
       company_assignment_end_date is null
       or company_assignment_date <= company_assignment_end_date
@@ -237,6 +246,7 @@ create table current_position (
   current_position_id integer default nextval('current_position_id_seq') not null
   , position_id integer not null
   , employee_id integer not null
+  , updated_at timestamp without time zone not null default current_timestamp
   , constraint current_position_PKC primary key (current_position_id)
 ) ;
 
@@ -305,8 +315,11 @@ drop table if exists employee_project_record cascade;
 create table employee_project_record (
   employee_project_record_id integer default nextval('employee_project_record_id_seq') not null
   , project_leaving_date date not null
+  , record_type character varying(30) not null default 'RETROSPECTIVE'
   , evaluation_point text not null
   , reflection_point text not null
+  , recorded_by_employee_id integer
+  , recorded_at timestamp without time zone not null default current_timestamp
   , project_id integer not null
   , employee_id integer not null
   , constraint employee_project_record_PKC primary key (employee_project_record_id)
@@ -319,6 +332,7 @@ create table evaluation (
   evaluation_id integer default nextval('evaluation_id_seq') not null
   , year integer not null
   , quarter integer not null
+  , evaluation_year_type character varying(20) not null default 'FISCAL'
   , comment text not null
   , evaluation integer not null
   , employee_id integer not null
@@ -733,6 +747,9 @@ alter table employee_project_record
 alter table employee_project_record
   add constraint employee_project_record_FK2 foreign key (employee_id) references employee(employee_id);
 
+alter table employee_project_record
+  add constraint employee_project_record_FK3 foreign key (recorded_by_employee_id) references employee(employee_id);
+
 alter table evaluation
   add constraint evaluation_FK1 foreign key (employee_id) references employee(employee_id);
 
@@ -811,6 +828,7 @@ comment on table belonging_company is '所属会社';
 comment on column belonging_company.belonging_company_id is '所属会社ID';
 comment on column belonging_company.company_id is '会社ID';
 comment on column belonging_company.employee_id is '社員ID';
+comment on column belonging_company.updated_at is '現在所属の更新日時';
 
 comment on table belonging_department is '所属部署';
 comment on column belonging_department.belonging_department_id is '所属部署ID';
@@ -838,6 +856,7 @@ comment on column company_assignment.company_id is '会社ID';
 comment on column company_assignment.employee_id is '社員ID';
 comment on column company_assignment.company_assignment_date is '会社配属日時';
 comment on column company_assignment.company_assignment_end_date is '会社所属終了日（NULLは所属継続中）';
+comment on column company_assignment.open_company_assignment_flag is '継続中所属の一意制約用フラグ';
 
 comment on table contact_information_for_staff_on_leave is '休職社員連絡先';
 comment on column contact_information_for_staff_on_leave.contact_information_for_staff_on_leave_id is '休職社員連絡先ID';
@@ -848,6 +867,7 @@ comment on table current_position is '現役職';
 comment on column current_position.current_position_id is '役職付ID';
 comment on column current_position.position_id is '役職ID';
 comment on column current_position.employee_id is '社員ID';
+comment on column current_position.updated_at is '現役職の更新日時';
 
 comment on table employee_address is '社員住所';
 comment on column employee_address.employee_address_id is '社員住所ID';
@@ -882,8 +902,11 @@ comment on column employee_programming_skill.employee_id is '社員ID';
 comment on table employee_project_record is '社員案件実績';
 comment on column employee_project_record.employee_project_record_id is '社員案件実績ID';
 comment on column employee_project_record.project_leaving_date is '案件離任日時';
+comment on column employee_project_record.record_type is '案件実績の記録種別';
 comment on column employee_project_record.evaluation_point is '評価点';
 comment on column employee_project_record.reflection_point is '反省点';
+comment on column employee_project_record.recorded_by_employee_id is '記録者社員ID';
+comment on column employee_project_record.recorded_at is '記録日時';
 comment on column employee_project_record.project_id is '案件ID';
 comment on column employee_project_record.employee_id is '社員ID';
 
@@ -891,6 +914,7 @@ comment on table evaluation is '評価';
 comment on column evaluation.evaluation_id is '評価ID';
 comment on column evaluation.year is '年度';
 comment on column evaluation.quarter is '四半期:1,2,3,4';
+comment on column evaluation.evaluation_year_type is '評価年度区分（例: FISCAL）';
 comment on column evaluation.comment is 'コメント';
 comment on column evaluation.evaluation is '評価:1~10';
 comment on column evaluation.employee_id is '社員ID';
