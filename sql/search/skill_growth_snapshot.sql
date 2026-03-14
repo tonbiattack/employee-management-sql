@@ -5,6 +5,11 @@
   想定ユースケース:
     - 育成対象者の抽出
     - 高成長社員の把握
+
+  SQLでやりすぎない判断:
+    - 真の「スキル成長」を評価するには、スキル登録履歴や学習イベント履歴が必要になる。
+      それがない現状では、このSQLは評価推移と現在スキルの簡易シグナルに留まる。
+    - 将来、時系列スキル履歴を導入するなら、成長判定ロジックは手続き層と分担したほうがよい。
 */
 WITH all_skills AS (
   SELECT employee_id, skill_level FROM employee.employee_database_skill
